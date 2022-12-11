@@ -1,9 +1,18 @@
-cmake_minimum_required(VERSION 3.8)
+cmake_minimum_required(VERSION 3.15)
 
-project(HalIR LANGUAGES C)
+project(HalIR
+        VERSION 0.0.1
+        DESCRIPTION "A library for cfiting synthetic spektra to IR data"
+        LANGUAGES C)
 
-add_library(HalIR SHARED src/halir.c include/HalIR/halir.h)
-target_include_directories(HalIR PUBLIC include)
+if(CMAKE_PROJECT_NAME STREQUAL PROJECT_NAME)
+  include(CTest)
+endif()
 
-add_executable(halir apps/halir.c)
-target_link_libraries(halir PUBLIC HalIR)
+add_subdirectory(src)
+
+add_subdirectory(apps)
+
+#if((CMAKE_PROJECT_NAME STREQUAL PROJECT_NAME OR MODERN_CMAKE_BUILD_TESTING) AND BUILD_TESTING)
+  #add_subdirectory(tests)
+#endif()

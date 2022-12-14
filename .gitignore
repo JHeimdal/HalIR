@@ -1,3 +1,7 @@
+# Some dirs
+Build*
+build*
+
 # Prerequisites
 *.d
 

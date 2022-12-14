@@ -1,0 +1,17 @@
+[
+{
+  "directory": "/home/jimmy/Programs/HalIR/src",
+  "command": "/usr/bin/cc -DHalIR_EXPORTS -I/home/jimmy/Programs/HalIR/src/../include -fPIC -o CMakeFiles/HalIR.dir/halir.c.o -c /home/jimmy/Programs/HalIR/src/halir.c",
+  "file": "/home/jimmy/Programs/HalIR/src/halir.c"
+},
+{
+  "directory": "/home/jimmy/Programs/HalIR/apps",
+  "command": "/usr/bin/cc  -I/home/jimmy/Programs/HalIR/src/../include  -o CMakeFiles/halir.dir/halir.c.o -c /home/jimmy/Programs/HalIR/apps/halir.c",
+  "file": "/home/jimmy/Programs/HalIR/apps/halir.c"
+},
+{
+  "directory": "/home/jimmy/Programs/HalIR/apps",
+  "command": "/usr/bin/cc  -I/home/jimmy/Programs/HalIR/src/../include  -o CMakeFiles/halir.dir/cJSON.c.o -c /home/jimmy/Programs/HalIR/apps/cJSON.c",
+  "file": "/home/jimmy/Programs/HalIR/apps/cJSON.c"
+}
+]

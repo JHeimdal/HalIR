@@ -1,4 +1,5 @@
 #include <iostream>
+#include "HalIR/halir.h"
 
 int main()
 {
@@ -40,6 +41,7 @@ const char* input_str = R"input(
     ]
   }
 })input";
-  std::cout << input_str << std::endl;
+  //std::cout << input_str << std::endl;
+  halir_workspace *work = halir_parseJSONinput(input_str);
   return 0;
 }

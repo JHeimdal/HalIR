@@ -13,6 +13,8 @@ endif()
 include(FetchContent)
 
 find_package(GSL)
+find_package(cerf)
+
 add_subdirectory(src)
 
 add_subdirectory(apps)

@@ -1,6 +1,12 @@
 # Some dirs
 Build*
 build*
+Debug*
+.cache*
+
+# Vim files
+*.swp
+*.swo
 
 # Prerequisites
 *.d

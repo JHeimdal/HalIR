@@ -5,7 +5,7 @@
             "rootDir": "/home/jimmy/Programs/HalIR/TestCalc/",
             "hapi_db": "",
             "pcomments": "CO Test on some different concentrations",
-            "pfiles": ["F0", "F1"]
+            "pfiles": []
     },
     "sampleEnv": {
             "temp": 303.0,
@@ -25,12 +25,12 @@
             {"molec": "CO",
              "isotop": "Natural",
              "vmr": 5.921539600296e-05,
-             "amountU": "mb",
+             "pressU": "mb",
              "prmfile": ""},
             {"molec": "H2O",
              "isotop": "Natural",
-             "vmr": 5.921539600296e-05,
-             "amountU": "mb",
+             "vmr": 9.21539600296e-04,
+             "pressU": "atm",
              "prmfile": ""}
     ]
   }

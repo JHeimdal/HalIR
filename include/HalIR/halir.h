@@ -3,6 +3,7 @@
 
 #include <stdio.h>
 #include <stddef.h>
+#include <gsl/gsl_vector.h>
 
 #define UNIT_LEN 4
 #define PATH_LEN 1024
@@ -113,6 +114,8 @@ typedef struct
 } halir_workspace;
 
 halir_workspace* halir_parseJSONinput(const char* const inputFile);
+size_t find_nearest_index(gsl_vector_float *v, float val);
+int halir_test_calc(halir_workspace *work);
 double CtoK(double temp) {
   return temp+273.15;
 }
@@ -142,6 +145,7 @@ void halir_print_workspace(halir_workspace *work) {
     printf("   isotop: %s\n", work->composition[cc]->isotop);
     printf("   vmr: %2.6e\n", work->composition[cc]->vmr);
     printf("   prmfile: %s\n", work->composition[cc]->prmfile);
+    printf("   nlines: %d\n", work->composition[cc]->hitran_head.ndatapnts);
   }
 }
 

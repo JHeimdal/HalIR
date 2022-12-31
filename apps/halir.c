@@ -16,6 +16,7 @@ int main(int argc, char **argv)
   halir_workspace *work = halir_parseJSONinput(inputFile);
   if (work == NULL)
     return 99;
-  halir_print_workspace(work);
+  /*halir_print_workspace(work);*/
+  halir_test_calc(work);
   return 0;
 }

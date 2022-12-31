@@ -1,11 +1,18 @@
+#include <gsl/gsl_vector_double.h>
+#include <gsl/gsl_vector_float.h>
+#include <gsl/gsl_math.h>
 #include <stdio.h>
 #include <string.h>
 #include <unistd.h>
 #include <stdlib.h>
 #include <ctype.h>
+#include <math.h>
 
 #include "HalIR/halir.h"
+#include "HalIR/tips.h"
 #include "HalIR/cJSON.h"
+#include <cerf.h>
+#include <complex.h>
 
 halir_workspace*
 halir_parseJSONinput(const char* const inputFile)
@@ -16,6 +23,7 @@ halir_parseJSONinput(const char* const inputFile)
   size_t readSize;
   int arrayLength;
   int read_err = 0;
+
   const cJSON *input_field = NULL;
   const cJSON *project_field = NULL;
   const cJSON *sampleEnv_field = NULL;
@@ -328,6 +336,7 @@ halir_parseJSONinput(const char* const inputFile)
         }
         current_comp->hitran_prms = (halir_HitranLine*)malloc(sizeof(halir_HitranLine)*current_comp->hitran_head.ndatapnts);
         readSize = fread(current_comp->hitran_prms, sizeof(halir_HitranLine), current_comp->hitran_head.ndatapnts, fp);
+        /*printf("reading prmfile: %s with %d number of lines\n", current_comp->prmfile, current_comp->hitran_head.ndatapnts);*/
         if (readSize != current_comp->hitran_head.ndatapnts) {
           fprintf(stderr, "Error while reading prmfile: %s\n", current_comp->prmfile);
           read_err = 5;
@@ -374,4 +383,130 @@ end:
     return NULL;
   } else
     return ret_workspace;
+}
+
+size_t find_nearest_index(gsl_vector_float *v, float val)
+{
+  gsl_vector_float *tmp = gsl_vector_float_alloc(v->size);
+  gsl_vector_float_memcpy(tmp, v);
+  gsl_vector_float_add_constant(tmp, -1*val);
+  gsl_vector_float_mul(tmp, tmp);
+  size_t idx = gsl_vector_float_min_index(tmp);
+  gsl_vector_float_free(tmp);
+  return idx;
+}
+
+int halir_test_calc(halir_workspace *work)
+{
+  double q296, qT;
+  double T = work->temp;
+  double sqT = sqrtf(T);
+  double P = work->press;
+  double vc, S, q, tfac, mu_step, mu_off1;
+  double sig_v = 0.1;
+  float alphaD_max, alphaD_min, alphaL_max,  alphaL_min;
+
+  const double kb_si = 1.3806503e-23; // J/K
+  const double kb_erg = 1.3806503e-16; // erg/K
+  const double invkb_erg = 1./kb_erg; // K/erg
+  const double invkb_si = 1./kb_si; // K/J
+  const double c_si = 299792458.; // m/s
+  const double c_erg = 29979245800.; // cm/s
+  const double atmmass_si=1.6605e-27; // g
+  const double atmmass_erg=1.6605e-24; // g
+  const double hc_erg = 6.62607015e-27*c_erg;
+  const double hc_si = 6.62607015e-34*c_si;
+  const double c1_erg = hc_erg/kb_erg;
+  const double NL = 2.686780524e19;
+  const double pi = 3.14159265358979;
+  const double ln2 = log(2);
+  const double sqrt_pi = sqrt(pi);
+  const double sqrt_ln2 = sqrt(ln2);
+
+  for (int comp=0; comp < work->composition_length; comp++) {
+    halir_HitranHead *head = &work->composition[comp]->hitran_head;
+    halir_HitranLine *prms = work->composition[comp]->hitran_prms;
+
+    q = work->composition[comp]->vmr;
+    tfac = sqrtf(2*ln2*kb_si*T);
+    // Allocate vectors used in the calculations
+    gsl_vector_float *v0 = gsl_vector_float_alloc(head->ndatapnts);
+    /*gsl_vector_float *t_mu = gsl_vector_float_alloc(head->ndatapnts);*/
+    gsl_vector_float *p_S  = gsl_vector_float_alloc(head->ndatapnts);
+    gsl_vector_float *a_B  = gsl_vector_float_alloc(head->ndatapnts);
+    /*gsl_vector_float *s_B  = gsl_vector_float_alloc(head->ndatapnts);*/
+    gsl_vector_float *MM   = gsl_vector_float_alloc(head->ndatapnts);
+    gsl_vector_float *taB  = gsl_vector_float_alloc(head->ndatapnts);
+    gsl_vector_float *alphaD  = gsl_vector_float_alloc(head->ndatapnts);
+    gsl_vector_float *alphaL  = gsl_vector_float_alloc(head->ndatapnts);
+
+    // Populate the vectors with numbers
+    for (int i=0; i < head->ndatapnts; i++) {
+      gsl_vector_float_set(v0, i, prms[i].trans_mu);
+      gsl_vector_float_set(p_S , i, prms[i].pressure_S);
+      gsl_vector_float_set(a_B , i, prms[i].air_B );
+      gsl_vector_float_set(alphaL , i, prms[i].self_B );
+      gsl_vector_float_set(MM  , i, sqrtf(c_si*c_si*atmmass_si*prms[i].molecMass));
+      gsl_vector_float_set(taB , i, powf( 296/T, prms[i].temp_air_B) );
+    }
+    // Correct for pressure shift
+    gsl_vector_float_axpby(P, p_S, 1., v0); // P should be P/P_0 but internali alwas use atm pressure units then P_0 = 1
+    // Calculate alphaD values
+    gsl_vector_float_memcpy(alphaD, v0);
+    gsl_vector_float_scale(alphaD, tfac);
+    /*gsl_vector_float_scale(MM, c);*/
+    gsl_vector_float_div(alphaD, MM);
+    // Calculate alphaL values
+    gsl_vector_float_axpby((1-q), a_B, q, alphaL);
+    gsl_vector_float_mul(alphaL, taB);
+    gsl_vector_float_scale(alphaL, P);
+    // Get min/max of alphaL and alphaD
+    gsl_vector_float_minmax(alphaD, &alphaD_min, &alphaD_max);
+    gsl_vector_float_minmax(alphaL, &alphaL_min, &alphaL_max);
+
+    mu_step = sig_v * (alphaD_min + alphaL_min);
+    mu_off1 = ceilf(50*GSL_MAX(alphaD_max, alphaL_max));
+
+    /*printf("mu_step: %f mu_off1: %f\n", mu_step, mu_off1);*/
+    size_t mu_size = (size_t)ceilf(((work->ROI[1]-work->ROI[0])+2*mu_off1)/mu_step);
+    mu_step = ((work->ROI[1]-work->ROI[0])+2*mu_off1)/(mu_size-1);
+    gsl_vector_float *mu = gsl_vector_float_alloc(mu_size);
+    float start_value = work->ROI[0]-mu_off1;
+    for (int i=0; i < mu_size; i++) {
+      gsl_vector_float_set(mu, i, start_value+i*mu_step);
+    }
+    size_t off1 = (size_t)ceilf(mu_off1/mu_step);
+    /*printf("mu_step: %f mu_size: %ld\n", mu_step, mu_size);*/
+    /*printf("mu[0]: %f mu[-1]: %f\n", gsl_vector_float_get(mu, 0), gsl_vector_float_get(mu, mu_size-1));*/
+
+    gsl_vector_float *y = gsl_vector_float_alloc(mu_size);
+    // Print some information (possible in later callback?)
+    /*printf("alphaL_min: %f alphaL_max %f\n", alphaL_min, alphaL_max);*/
+    /*printf("alphaD_min: %f alphaD_max %f\n", alphaD_min, alphaD_max);*/
+    for (int mm=0; mm < head->ndatapnts; mm++) {
+          vc = gsl_vector_float_get(v0, mm);
+          size_t idx = find_nearest_index(mu, vc);
+          q296 = tips_2011(prms[mm].molec_num, prms[mm].isotp_num, 296);
+          qT = tips_2011(prms[mm].molec_num, prms[mm].isotp_num, T);
+          S = prms[mm].line_I * q296/qT * exp(c1_erg*prms[mm].low_state_en/T)/exp(c1_erg*prms[mm].low_state_en/296)*((1-exp(-c1_erg*vc/T))/(1-exp(-c1_erg*vc/296)));
+          float a_D = gsl_vector_float_get(alphaD, mm);
+          float a_L = gsl_vector_float_get(alphaL, mm);
+
+          for (int i=(idx-off1); i < (idx+off1); i++) {
+            // y->data[i] += S/a_D * q * NL * work->pathL * 298/T * voigt(sqrt_ln2*(mu->data[i]-vc)/a_D, 1/a_D, sqrt_ln2*a_L/a_D);
+            y->data[i] += sqrt_ln2*S/(sqrt_pi*a_D) * q * work->pathL/100 * P*101325/1e4 * invkb_si/T * re_w_of_z(sqrt_ln2*(mu->data[i]-vc)/a_D, sqrt_ln2*a_L/a_D);
+          }
+    }
+    for (int i = 0; i < mu_size; i++) {
+      printf("%f %f\n", mu->data[i], y->data[i]);
+    }
+    gsl_vector_float_free(v0);
+    gsl_vector_float_free(p_S);
+    gsl_vector_float_free(a_B);
+    gsl_vector_float_free(alphaL);
+    gsl_vector_float_free(alphaD);
+    gsl_vector_float_free(MM);
+    gsl_vector_float_free(taB);
+  }
+  return 0;
 }

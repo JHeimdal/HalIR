@@ -12,7 +12,6 @@
 #include "HalIR/tips.h"
 #include "HalIR/cJSON.h"
 #include <cerf.h>
-#include <complex.h>
 
 halir_workspace*
 halir_parseJSONinput(const char* const inputFile)
@@ -486,8 +485,8 @@ int halir_test_calc(halir_workspace *work)
     for (int mm=0; mm < head->ndatapnts; mm++) {
           vc = gsl_vector_float_get(v0, mm);
           size_t idx = find_nearest_index(mu, vc);
-          q296 = tips_2011(prms[mm].molec_num, prms[mm].isotp_num, 296);
-          qT = tips_2011(prms[mm].molec_num, prms[mm].isotp_num, T);
+          q296 = tips_2020(prms[mm].molec_num, prms[mm].isotp_num, 296);
+          qT = tips_2020(prms[mm].molec_num, prms[mm].isotp_num, T);
           S = prms[mm].line_I * q296/qT * exp(c1_erg*prms[mm].low_state_en/T)/exp(c1_erg*prms[mm].low_state_en/296)*((1-exp(-c1_erg*vc/T))/(1-exp(-c1_erg*vc/296)));
           float a_D = gsl_vector_float_get(alphaD, mm);
           float a_L = gsl_vector_float_get(alphaL, mm);

@@ -1,0 +1,30 @@
+{
+  "input": {
+    "project": {
+      "pname": "HCl_Ref",
+      "rootDir": "/home/jimmy/Programs/HalIR/tests/HCl_Ref",
+      "pcomments": "This is for some test data",
+      "pfiles": []
+    },
+    "sampleEnv": {
+      "temp": 298.0,
+      "tempU": "K",
+      "press": 0.7895,
+      "pressU": "atm",
+      "pathL": 5.0,
+      "pathLU": "cm",
+      "ROI": [2500.0, 3150.0],
+      "res": 0.1,
+      "apod": "Boxcar",
+      "fov": 0.1,
+      "ftype": "Transmission",
+      "bgfile": ""},
+    "composition": [
+      {"molec": "HCl",
+       "isotop": "Natural",
+       "vmr": 0.333333,
+       "pressU": "mmHg",
+       "prmfile": "/home/jimmy/Programs/HalIR/tests/HCl_Ref/HCl.hpar"}
+    ]
+  }
+}

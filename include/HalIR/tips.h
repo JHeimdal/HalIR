@@ -2751,6 +2751,15 @@ float tips_2011(int M, int I, float T) {
   }
 }
 
+extern void tips_2020_F(int *MOL, double *TEMP, int *ISO, double *GI, double *QT);
+float tips_2020(int M, int I, float T) {
+  double QT;
+  double GI;
+  double TEMP = (double)T;
+  tips_2020_F(&M, &TEMP, &I, &GI, &QT);
+  return (float)QT;
+}
+
 #endif
 /*
 qi_map.emplace(11,1.0)

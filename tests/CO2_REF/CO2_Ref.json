@@ -1,0 +1,30 @@
+{
+  "input": {
+    "project": {
+      "pname": "CO2_Ref",
+      "rootDir": "/home/jimmy/Programs/HalIR/tests/CO2_REF",
+      "pcomments": "This is for some test data",
+      "pfiles": []
+    },
+    "sampleEnv": {
+      "temp": 298.0,
+      "tempU": "K",
+      "press": 0.1,
+      "pressU": "atm",
+      "pathL": 10.0,
+      "pathLU": "cm",
+      "ROI": [600.0, 750.0],
+      "res": 0.1,
+      "apod": "Boxcar",
+      "fov": 0.1,
+      "ftype": "Transmission",
+      "bgfile": ""},
+    "composition": [
+      {"molec": "CO2",
+       "isotop": "Natural",
+       "vmr": 350e-6,
+       "pressU": "mb",
+       "prmfile": "/home/jimmy/Programs/HalIR/tests/CO2_REF/CO2.hpar"}
+    ]
+  }
+}

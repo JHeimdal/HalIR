@@ -1,0 +1,35 @@
+{
+  "input": {
+    "project": {
+      "pname": "CH4_Ref",
+      "rootDir": "/home/jimmy/Programs/HalIR/tests/CH4_Ref/",
+      "pcomments": "This is for some test data",
+      "pfiles": []
+    },
+    "sampleEnv": {
+      "temp": 298.0,
+      "tempU": "K",
+      "press": 1.0,
+      "pressU": "atm",
+      "pathL": 1.0,
+      "pathLU": "cm",
+      "ROI": [2500.0, 3250.0],
+      "res": 0.1,
+      "apod": "Boxcar",
+      "fov": 0.1,
+      "ftype": "Transmission",
+      "bgfile": ""},
+    "composition": [
+      {"molec": "CH4",
+       "isotop": "Natural",
+       "vmr": 0.025,
+       "pressU": "mmHg",
+       "prmfile": "/home/jimmy/Programs/HalIR/tests/CH4_Ref/CH4.hpar"},
+      {"molec": "HCl",
+       "isotop": "Natural",
+       "vmr": 0.015,
+       "pressU": "mmHg",
+       "prmfile": "/home/jimmy/Programs/HalIR/tests/CH4_Ref/HCl.hpar"}
+    ]
+  }
+}

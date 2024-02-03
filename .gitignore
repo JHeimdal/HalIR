@@ -9,6 +9,10 @@ Debug*
 *.swp
 *.swo
 
+# Test related files
+tags
+*.hpar
+
 # Prerequisites
 *.d
 

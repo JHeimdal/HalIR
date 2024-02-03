@@ -1,0 +1,30 @@
+{
+  "input": {
+    "project": {
+      "pname": "CO_Conc",
+      "rootDir": "/home/jimmy/Programs/HalIR/tests/CO_conc/",
+      "pcomments": "This is for some test data",
+      "pfiles": []
+    },
+    "sampleEnv": {
+      "temp": 303.0,
+      "tempU": "K",
+      "press": 1.0,
+      "pressU": "atm",
+      "pathL": 300.0,
+      "pathLU": "cm",
+      "ROI": [2000.0, 2245.0],
+      "res": 0.1,
+      "apod": "Boxcar",
+      "fov": 0.1,
+      "ftype": "Transmission",
+      "bgfile": ""},
+    "composition": [
+      {"molec": "CO",
+       "isotop": "Natural",
+       "vmr": 1.5e-4,
+       "pressU": "ppm",
+       "prmfile": "/home/jimmy/Programs/HalIR/tests/CO_conc/CO.hpar"}
+    ]
+  }
+}

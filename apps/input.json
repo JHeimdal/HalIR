@@ -2,7 +2,7 @@
   "input": {
     "project": {
             "pname": "CO_Test2",
-            "rootDir": "/home/jimmy/Programs/HalIR/TestCalc/",
+            "rootDir": "/home/jimmy/Programs/HalIR/Build/TestCalc/",
             "hapi_db": "",
             "pcomments": "CO Test on some different concentrations",
             "pfiles": []

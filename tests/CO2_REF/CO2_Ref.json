@@ -11,7 +11,7 @@
       "tempU": "K",
       "press": 0.1,
       "pressU": "atm",
-      "pathL": 10.0,
+      "pathL": 20.0,
       "pathLU": "cm",
       "ROI": [600.0, 750.0],
       "res": 0.1,

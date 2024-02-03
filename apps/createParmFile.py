@@ -46,6 +46,8 @@ def hapiDownload(json_input: dict):
     with TemporaryDirectory() as tmpDir:
         with chDir(tmpDir):
             rootDir = Path(json_input['project']['rootDir'])
+            if not rootDir.exists():
+                rootDir.mkdir(parents=True)
             hp.db_begin(json_input['project']['pname'])
             for comp in json_input['composition']:
                 filename = rootDir/Path(comp['molec']+'.hpar')

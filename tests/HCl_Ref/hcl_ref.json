@@ -7,23 +7,23 @@
       "pfiles": []
     },
     "sampleEnv": {
-      "temp": 298.0,
+      "temp": 303.0,
       "tempU": "K",
-      "press": 0.7895,
+      "press": 1.000,
       "pressU": "atm",
-      "pathL": 5.0,
+      "pathL": 300.0,
       "pathLU": "cm",
-      "ROI": [2500.0, 3150.0],
-      "res": 0.1,
+      "ROI": [2650.0, 3150.0],
+      "res": 0.02,
       "apod": "Boxcar",
-      "fov": 0.1,
+      "fov": 3.0,
       "ftype": "Transmission",
       "bgfile": ""},
     "composition": [
       {"molec": "HCl",
        "isotop": "Natural",
-       "vmr": 0.333333,
-       "pressU": "mmHg",
+       "vmr": 1e-5,
+       "pressU": "mb",
        "prmfile": "/home/jimmy/Programs/HalIR/tests/HCl_Ref/HCl.hpar"}
     ]
   }

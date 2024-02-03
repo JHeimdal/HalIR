@@ -1,6 +1,7 @@
 #include <gsl/gsl_vector_double.h>
 #include <gsl/gsl_vector_float.h>
 #include <gsl/gsl_math.h>
+#include <stddef.h>
 #include <stdio.h>
 #include <string.h>
 #include <unistd.h>
@@ -108,60 +109,67 @@ halir_parseJSONinput(const char* const inputFile)
 
   // Read the sampleEnv field
   sampleEnv_field = cJSON_GetObjectItem(input_field, "sampleEnv");
-  field_value = cJSON_GetObjectItem(sampleEnv_field, "temp");
-  if (cJSON_IsNumber(field_value)) {
-    ret_workspace->temp = field_value->valuedouble;
-    /*printf("temp: %3.1f ", ret_workspace->temp);*/
-  } else {
-    fprintf(stderr, "Missing temp keyword or wrong type\n");
-    read_err = 3;
-    goto end;
-  }
   field_value = cJSON_GetObjectItem(sampleEnv_field, "tempU");
   if (cJSON_IsString(field_value)) {
-    strncpy(ret_workspace->tempU, field_value->valuestring, UNIT_LEN-1);
-    ret_workspace->tempU[UNIT_LEN-1] = '\0';
-    /*printf("%s\n", ret_workspace->tempU);*/
+    ret_workspace->tempU = halir_Unit_from_str(field_value->valuestring);
   } else {
     fprintf(stderr, "Missing tempU keyword or wrong type\n");
     read_err = 3;
     goto end;
   }
-  field_value = cJSON_GetObjectItem(sampleEnv_field, "press");
+  field_value = cJSON_GetObjectItem(sampleEnv_field, "temp");
   if (cJSON_IsNumber(field_value)) {
-    ret_workspace->press = field_value->valuedouble;
-    /*printf("press: %3.1f ", ret_workspace->press);*/
+    ret_workspace->temp = halir_Units_to_Hitran(&ret_workspace->tempU, &field_value->valuedouble, &read_err);
+    if (read_err != 0) {
+      fprintf(stderr, "Temperature unit not supported\n");
+      goto end;
+    }
   } else {
-    fprintf(stderr, "Missing press keyword or wrong type\n");
+    fprintf(stderr, "Missing temp keyword or wrong type\n");
     read_err = 3;
     goto end;
   }
   field_value = cJSON_GetObjectItem(sampleEnv_field, "pressU");
   if (cJSON_IsString(field_value)) {
-    strncpy(ret_workspace->pressU, field_value->valuestring, UNIT_LEN-1);
-    ret_workspace->pressU[UNIT_LEN-1] = '\0';
+    ret_workspace->pressU = halir_Unit_from_str(field_value->valuestring);
     /*printf("%s\n", ret_workspace->pressU);*/
   } else {
     fprintf(stderr, "Missing pressU keyword or wrong type\n");
     read_err = 3;
     goto end;
   }
-  field_value = cJSON_GetObjectItem(sampleEnv_field, "pathL");
+  field_value = cJSON_GetObjectItem(sampleEnv_field, "press");
   if (cJSON_IsNumber(field_value)) {
-    ret_workspace->pathL = field_value->valuedouble;
-    /*printf("pathL: %3.1f ", ret_workspace->pathL);*/
+    /*printf("%s: fac: %e\n", halir_Units_to_str[ret_workspace->pressU], halir_Units_factors[ret_workspace->pressU]);*/
+    ret_workspace->press = halir_Units_to_Hitran(&ret_workspace->pressU, &field_value->valuedouble, &read_err);
+    if (read_err != 0) {
+      fprintf(stderr, "Pressure unit not supported\n");
+      goto end;
+    }
   } else {
-    fprintf(stderr, "Missing pathL keyword or wrong type\n");
+    fprintf(stderr, "Missing press keyword or wrong type\n");
     read_err = 3;
     goto end;
   }
   field_value = cJSON_GetObjectItem(sampleEnv_field, "pathLU");
   if (cJSON_IsString(field_value)) {
-    strncpy(ret_workspace->pathLU, field_value->valuestring, UNIT_LEN-1);
-    ret_workspace->pathLU[UNIT_LEN-1] = '\0';
+    ret_workspace->pathLU = halir_Unit_from_str(field_value->valuestring);
     /*printf("%s\n", ret_workspace->pathLU);*/
   } else {
     fprintf(stderr, "Missing pathLU keyword or wrong type\n");
+    read_err = 3;
+    goto end;
+  }
+  field_value = cJSON_GetObjectItem(sampleEnv_field, "pathL");
+  if (cJSON_IsNumber(field_value)) {
+    /*printf("%s: fac: %e\n", halir_Units_to_str[ret_workspace->pathLU], halir_Units_factors[ret_workspace->pathLU]);*/
+    ret_workspace->pathL = halir_Units_to_Hitran(&ret_workspace->pathLU, &field_value->valuedouble, &read_err);
+    if (read_err != 0) {
+      fprintf(stderr, "Path length unit not supported\n");
+      goto end;
+    }
+  } else {
+    fprintf(stderr, "Missing pathL keyword or wrong type\n");
     read_err = 3;
     goto end;
   }
@@ -283,21 +291,79 @@ halir_parseJSONinput(const char* const inputFile)
         read_err = 4;
         goto end;
       }
-      value = cJSON_GetObjectItem(comp, "pressU");
-      if (cJSON_IsString(value)) {
-        strcpy(current_comp->pressU, value->valuestring);
-        /*printf("pressU: %s\n", current_comp->pressU);*/
+      // Here are are three different cases of keywords
+      // 1. There can be only concU and conc
+      // 2, There can be only vmr
+      // 3, Both 1 and 2
+      cJSON *concU = cJSON_GetObjectItem(comp, "concU");
+      cJSON *conc = cJSON_GetObjectItem(comp, "conc");
+      cJSON *vmr = cJSON_GetObjectItem(comp, "vmr");
+      if ((concU != NULL) && (conc != NULL) && (vmr == NULL)) {
+        if (cJSON_IsString(concU)) {
+          current_comp->concU = halir_Unit_from_str(concU->valuestring);
+          printf("concU: %s\n", halir_Units_to_str[current_comp->concU]);
+        } else {
+          fprintf(stderr, "Missing pressU keyword or wrong type\n");
+          read_err = 4;
+          goto end;
+        }
+        if (cJSON_IsNumber(conc)) {
+          switch (current_comp->concU) {
+            case PPM:
+            case PPT:
+            case PPB:
+              current_comp->conc = halir_Units_to_Hitran(&current_comp->concU, &conc->valuedouble, &read_err);
+              current_comp->vmr = current_comp->conc;
+              break;
+            default:
+              current_comp->conc = halir_Units_to_Hitran(&current_comp->concU, &conc->valuedouble, &read_err);
+              current_comp->vmr = current_comp->conc/ret_workspace->press;
+          }
+          if (read_err != 0) {
+            fprintf(stderr, "Conc unit not supported\n");
+            goto end;
+          }
+        } else {
+          fprintf(stderr, "Missing conc keyword or wrong type\n");
+          read_err = 4;
+          goto end;
+        }
+      } else if ((concU == NULL) && (conc == NULL) && (vmr != NULL)) {
+        if (cJSON_IsNumber(vmr)) {
+          current_comp->vmr = vmr->valuedouble;
+          /*printf("vmr: %e\n", current_comp->vmr);*/
+        } else {
+          fprintf(stderr, "Missing vmr keyword or wrong type\n");
+          read_err = 4;
+          goto end;
+        }
+      } else if ((concU != NULL) && (conc != NULL) && (vmr != NULL)) {
+        if (cJSON_IsString(concU)) {
+          current_comp->concU = halir_Unit_from_str(concU->valuestring);
+          /*printf("pressU: %s\n", current_comp->pressU);*/
+        } else {
+          fprintf(stderr, "Missing pressU keyword or wrong type\n");
+          read_err = 4;
+          goto end;
+        }
+        if (cJSON_IsNumber(conc)) {
+          current_comp->conc = halir_Units_factors[current_comp->concU] * conc->valuedouble;
+          /*printf("pressU: %s\n", current_comp->pressU);*/
+        } else {
+          fprintf(stderr, "Missing pressU keyword or wrong type\n");
+          read_err = 4;
+          goto end;
+        }
+        if (cJSON_IsNumber(vmr)) {
+          current_comp->vmr = vmr->valuedouble;
+          /*printf("vmr: %e\n", current_comp->vmr);*/
+        } else {
+          fprintf(stderr, "Missing vmr keyword or wrong type\n");
+          read_err = 4;
+          goto end;
+        }
       } else {
-        fprintf(stderr, "Missing pressU keyword or wrong type\n");
-        read_err = 4;
-        goto end;
-      }
-      value = cJSON_GetObjectItem(comp, "vmr");
-      if (cJSON_IsNumber(value)) {
-        current_comp->vmr = value->valuedouble;
-        /*printf("vmr: %e\n", current_comp->vmr);*/
-      } else {
-        fprintf(stderr, "Missing vmr keyword or wrong type\n");
+        fprintf(stderr, "Missing concentration keyword either vmr or a conc, concU pair needed\n");
         read_err = 4;
         goto end;
       }

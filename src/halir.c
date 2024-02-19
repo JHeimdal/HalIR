@@ -21,8 +21,10 @@ halir_parseJSONinput(const char* const inputFile)
   FILE *fp;
   size_t counter;
   size_t readSize;
+  size_t file_length;
   int arrayLength;
   int read_err = 0;
+  char *infile;
 
   const cJSON *input_field = NULL;
   const cJSON *project_field = NULL;
@@ -30,20 +32,19 @@ halir_parseJSONinput(const char* const inputFile)
   const cJSON *composition_field = NULL;
   const cJSON *field_value = NULL;
 
-  if (access(inputFile, F_OK|R_OK) == 0)
+  if (access(inputFile, F_OK|R_OK) == 0) {
     fp = fopen(inputFile, "r");
-  else {
-    fprintf(stderr, "No such file or no access: %s\n", inputFile);
-    return NULL;
+    fseek(fp, 0, SEEK_END);
+    file_length = ftell(fp);
+    rewind(fp);
+    infile = (char*)malloc((file_length+1)*sizeof(char));
+    fread(infile, sizeof(char), file_length, fp);
+    fclose(fp);
+    infile[file_length] = '\0';
+  } else {
+    infile = inputFile;
   }
-  fseek(fp, 0, SEEK_END);
-  size_t file_length = ftell(fp);
-  rewind(fp);
 
-  char infile[file_length+1];
-  fread(infile, sizeof(char), file_length, fp);
-  fclose(fp);
-  infile[file_length] = '\0';
 
   halir_workspace *ret_workspace = (halir_workspace*)malloc(sizeof(halir_workspace));
 
@@ -120,6 +121,8 @@ halir_parseJSONinput(const char* const inputFile)
   field_value = cJSON_GetObjectItem(sampleEnv_field, "temp");
   if (cJSON_IsNumber(field_value)) {
     ret_workspace->temp = halir_Units_to_Hitran(&ret_workspace->tempU, &field_value->valuedouble, &read_err);
+    // Converted to from tempU -> kelvin (halir_Units) update workspace tempU
+    ret_workspace->tempU = K;
     if (read_err != 0) {
       fprintf(stderr, "Temperature unit not supported\n");
       goto end;
@@ -446,8 +449,9 @@ end:
   if (read_err) {
     fprintf(stderr, "Something went wrong while reading input\n");
     return NULL;
-  } else
+  } else {
     return ret_workspace;
+  }
 }
 
 size_t find_nearest_index(gsl_vector_float *v, float val)

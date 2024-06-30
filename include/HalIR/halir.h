@@ -11,6 +11,8 @@
 #define PATH_LEN 1024
 #define COMMENT_LEN 4096
 
+#define halir_num float
+
 typedef enum
 {
   HALIR_BOXCAR,
@@ -50,11 +52,11 @@ typedef enum
 double halir_Units_factors[] = {
   0.0, //None
   1.0, //ATM,
-  9.86923267e-4, //MBAR,
-  9.86923267e-1, //BAR,
-  9.86923267e-6, //PA,
-  9.86923267e-4, //HPA,
-  1.31578947e-3, //MMHG,
+  9.86923266716013e-4, //MBAR,
+  9.86923266716013e-1, //BAR,
+  9.86923266716013e-6, //PA,
+  9.86923266716013e-4, //HPA,
+  1.31578947368421e-3, //MMHG,
   1.0e-6, //PPM,
   1.0e-12, //PPT,
   1.0e-9, //PPB,
@@ -186,14 +188,14 @@ typedef struct {
 typedef struct {
   int    molec_num;	 // Molecule Number
   int    isotp_num;	 // Isotopologue Number
-  double trans_mu;	 // Transition wavenumber (cm^-1)
-  double line_I;	 // Line Intensity
-  double einstein_A;	 // Einstein A-coefficient
-  double air_B;		 // Air broadened with
-  double self_B;	 // Self broadened width
-  double low_state_en;	 // Lower state energy
-  double temp_air_B;	 // Temperature dependence of air width
-  double pressure_S;	 // Pressure Shift
+  halir_num trans_mu;	 // Transition wavenumber (cm^-1)
+  halir_num line_I;	 // Line Intensity
+  halir_num einstein_A;	 // Einstein A-coefficient
+  halir_num air_B;		 // Air broadened with
+  halir_num self_B;	 // Self broadened width
+  halir_num low_state_en;	 // Lower state energy
+  halir_num temp_air_B;	 // Temperature dependence of air width
+  halir_num pressure_S;	 // Pressure Shift
   char   u_vib_quant[16];// Upper vibrational quanta
   char   l_vib_quant[16];// Lower vibrational quanta
   char   u_loc_quant[16];// Upper local quanta
@@ -201,18 +203,18 @@ typedef struct {
   char   err_code[6];	 // Error codes
   char   ref_code[12];	 // Reference codes
   char   line_mix[2];	 // Flag for line mixing
-  double u_stat_w;	 // Upper statistical weight
-  double l_stat_w;	 // Lower statistical weight
-  double abundance; // abundace for Isotopologue
-  double molecMass; // Mass for this Isotopologue
+  halir_num u_stat_w;	 // Upper statistical weight
+  halir_num l_stat_w;	 // Lower statistical weight
+  halir_num abundance; // abundace for Isotopologue
+  halir_num molecMass; // Mass for this Isotopologue
 } halir_HitranLine;
 
 // Struct describing a compond (gas) in the system
 typedef struct {
   char molec[6];
   char isotop[12];
-  double vmr;
-  double conc;
+  halir_num vmr;
+  halir_num conc;
   halir_Units concU;
   char prmfile[PATH_LEN];
   halir_HitranHead hitran_head;
@@ -230,12 +232,12 @@ typedef struct
   size_t pfiles_length;
 
   // Environment of system
-  double temp;
-  double press;
-  double pathL;
-  double ROI[2];
-  double res;
-  double fov;
+  halir_num temp;
+  halir_num press;
+  halir_num pathL;
+  halir_num ROI[2];
+  halir_num res;
+  halir_num fov;
   halir_Units tempU;
   halir_Units pressU;
   halir_Units pathLU;
@@ -246,6 +248,13 @@ typedef struct
   size_t composition_length;
   halir_compound **composition;
 } halir_workspace;
+
+// Result of simulated spectra
+typedef struct{
+  size_t ndatapnts;
+  halir_compound *composition;
+  halir_num *data;
+} hair_spectra;
 
 halir_workspace* halir_parseJSONinput(const char* const inputFile);
 size_t find_nearest_index(gsl_vector_float *v, float val);

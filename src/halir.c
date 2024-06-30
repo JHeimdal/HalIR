@@ -145,6 +145,8 @@ halir_parseJSONinput(const char* const inputFile)
   if (cJSON_IsNumber(field_value)) {
     /*printf("%s: fac: %e\n", halir_Units_to_str[ret_workspace->pressU], halir_Units_factors[ret_workspace->pressU]);*/
     ret_workspace->press = halir_Units_to_Hitran(&ret_workspace->pressU, &field_value->valuedouble, &read_err);
+    // Converted to from pressU -> atm (halir_Units) update workspace pressU
+    ret_workspace->pressU = ATM;
     if (read_err != 0) {
       fprintf(stderr, "Pressure unit not supported\n");
       goto end;

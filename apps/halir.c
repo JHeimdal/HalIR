@@ -1,6 +1,6 @@
 #include "HalIR/halir.h"
 #include <stdio.h>
-#include <string.h>
+//#include <string.h>
 #include <unistd.h>
 #include <stdlib.h>
 
@@ -20,6 +20,6 @@ int main(int argc, char **argv)
   if (work == NULL)
     return 99;
   halir_print_workspace(work);
-  /*halir_test_calc(work);*/
+  halir_test_calc(work);
   return 0;
 }

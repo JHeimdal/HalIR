@@ -11,7 +11,7 @@
 #define PATH_LEN 1024
 #define COMMENT_LEN 4096
 
-#define halir_num float
+#define halir_num double
 
 typedef enum
 {

@@ -2,7 +2,7 @@
   "input": {
     "project": {
       "pname": "CO_Test",
-      "rootDir": "/home/jimmy/Programs/HalIR/tests/CO_TEST",
+      "rootDir": "/home/jimmy/Programs/HalIR/tests/CO_test",
       "pcomments": "This is for some test data",
       "pfiles": []
     },
@@ -24,7 +24,7 @@
        "isotop": "Natural",
        "vmr": 1.3e-3,
        "pressU": "ppm",
-       "prmfile": "/home/jimmy/Programs/HalIR/tests/CO_TEST/CO.hpar"}
+       "prmfile": "/home/jimmy/Programs/HalIR/tests/CO_test/CO.hpar"}
     ]
   }
 }

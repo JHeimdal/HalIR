@@ -4,8 +4,8 @@
 #include <cstring>
 #include <ios>
 #include <iostream>
+#include <vector>
 #include <boost/json/src.hpp>
-#include <limits>
 #include <string>
 
 extern "C" {
@@ -17,7 +17,7 @@ namespace json = boost::json;
 bool compare_halir_num(halir_num *A, halir_num *B) {
   //double EPSILON = std::numeric_limits<double>::epsilon();
   halir_num EPSILON = 1e-9;
-  if (std::abs(*A-*B) <= EPSILON * std::max(1.0f, *A))
+  if (std::abs(*A-*B) <= EPSILON * std::max(1.0, *A))
     return true;
   else
     return false;
@@ -75,8 +75,23 @@ bool compare_halir_workspace(halir_workspace *ref, halir_workspace *test) {
   return true;
 }
 
-int main()
+int main(int argc, char **argv)
 {
+  enum TEST {
+    TEMP_F_TO_K,
+    TEMP_C_TO_K,
+    PRESS_BAR_TO_ATM,
+    PRESS_MBAR_TO_ATM,
+    PRESS_PA_TO_ATM,
+    PRESS_HPA_TO_ATM,
+    PRESS_MMHG_TO_ATM,
+  };
+
+  using namespace std;
+
+  vector<string> args(argv + 1, argv + argc);
+  TEST test = (TEST)stoi(args[0]);
+
   json::value ref1 = {
     { "input", {
       {"project", {
@@ -145,70 +160,61 @@ int main()
     }
   };
 
-
   halir_workspace *work_p1;
   std::string ref1_str = json::serialize(inp1);
   halir_workspace *work_ref = halir_parseJSONinput(ref1_str.c_str());
+  string err_msg;
 
-  inp1.at_pointer("/input/sampleEnv/temp") = 86;
-  inp1.at_pointer("/input/sampleEnv/tempU") = "F";
+  switch (test) {
+    case TEMP_F_TO_K:
+      inp1.at_pointer("/input/sampleEnv/temp") = 86;
+      inp1.at_pointer("/input/sampleEnv/tempU") = "F";
+      err_msg = "Error in temperature conversion F->K\n";
+      break;
+    case TEMP_C_TO_K:
+      inp1.at_pointer("/input/sampleEnv/temp") = 30;
+      inp1.at_pointer("/input/sampleEnv/tempU") = "C";
+      err_msg =  "Error in temperature conversion C->K\n";
+      break;
+    case PRESS_BAR_TO_ATM:
+      inp1.at_pointer("/input/sampleEnv/press") = 1.0132500;
+      inp1.at_pointer("/input/sampleEnv/pressU") = "bar";
+      err_msg = "Error in temperature conversion bar->atm\n";
+      break;
+    case PRESS_MBAR_TO_ATM:
+      inp1.at_pointer("/input/sampleEnv/press") = 1.0132500e3;
+      inp1.at_pointer("/input/sampleEnv/pressU") = "mbar";
+      err_msg = "Error in temperature conversion mbar->atm\n";
+      break;
+    case PRESS_PA_TO_ATM:
+      inp1.at_pointer("/input/sampleEnv/press") = 1.0132500e5;
+      inp1.at_pointer("/input/sampleEnv/pressU") = "pa";
+      err_msg = "Error in temperature conversion pa->atm\n";
+      break;
+    case PRESS_HPA_TO_ATM:
+      inp1.at_pointer("/input/sampleEnv/press") = 1.0132500e3;
+      inp1.at_pointer("/input/sampleEnv/pressU") = "hpa";
+      err_msg = "Error in temperature conversion hpa->atm\n";
+      break;
+    case PRESS_MMHG_TO_ATM:
+      inp1.at_pointer("/input/sampleEnv/press") = 760.00000;
+      inp1.at_pointer("/input/sampleEnv/pressU") = "mmhg";
+      err_msg = "Error in temperature conversion mmHg->atm\n";
+      //if (!compare_halir_workspace(work_ref, work_p1)) {
+        //std::cout.precision(13);
+        //std::cout << std::scientific;
+        //std::cout << "ref: " << work_ref->press << " inp: " << work_p1->press << std::endl;
+        //return 1;
+      //}
+      break;
+  }
   std::string inp2_str = json::serialize(inp1);
   work_p1 = halir_parseJSONinput(inp2_str.c_str());
   if (!compare_halir_workspace(work_ref, work_p1)) {
-    std::cout << "Error in temperature conversion F->K\n";
+    std::cout << err_msg << std::endl;
     return 1;
   }
-  inp1.at_pointer("/input/sampleEnv/temp") = 30;
-  inp1.at_pointer("/input/sampleEnv/tempU") = "C";
-  inp2_str = json::serialize(inp1);
-  work_p1 = halir_parseJSONinput(inp2_str.c_str());
-  if (!compare_halir_workspace(work_ref, work_p1)) {
-    std::cout << "Error in temperature conversion C->K\n";
-    return 1;
-  }
-  inp1.at_pointer("/input/sampleEnv/press") = 1.0132500;
-  inp1.at_pointer("/input/sampleEnv/pressU") = "bar";
-  inp2_str = json::serialize(inp1);
-  work_p1 = halir_parseJSONinput(inp2_str.c_str());
-  if (!compare_halir_workspace(work_ref, work_p1)) {
-    std::cout << "Error in temperature conversion bar->atm\n";
-    return 1;
-  }
-  inp1.at_pointer("/input/sampleEnv/press") = 1.0132500e3;
-  inp1.at_pointer("/input/sampleEnv/pressU") = "mbar";
-  inp2_str = json::serialize(inp1);
-  work_p1 = halir_parseJSONinput(inp2_str.c_str());
-  if (!compare_halir_workspace(work_ref, work_p1)) {
-    std::cout << "Error in temperature conversion mbar->atm\n";
-    return 1;
-  }
-  inp1.at_pointer("/input/sampleEnv/press") = 1.0132500e5;
-  inp1.at_pointer("/input/sampleEnv/pressU") = "pa";
-  inp2_str = json::serialize(inp1);
-  work_p1 = halir_parseJSONinput(inp2_str.c_str());
-  if (!compare_halir_workspace(work_ref, work_p1)) {
-    std::cout << "Error in temperature conversion pa->atm\n";
-    return 1;
-  }
-  inp1.at_pointer("/input/sampleEnv/press") = 1.0132500e3;
-  inp1.at_pointer("/input/sampleEnv/pressU") = "hpa";
-  inp2_str = json::serialize(inp1);
-  work_p1 = halir_parseJSONinput(inp2_str.c_str());
-  if (!compare_halir_workspace(work_ref, work_p1)) {
-    std::cout << "Error in temperature conversion hpa->atm\n";
-    return 1;
-  }
-  inp1.at_pointer("/input/sampleEnv/press") = 760.00000;
-  inp1.at_pointer("/input/sampleEnv/pressU") = "mmhg";
-  inp2_str = json::serialize(inp1);
-  work_p1 = halir_parseJSONinput(inp2_str.c_str());
-  if (!compare_halir_workspace(work_ref, work_p1)) {
-    std::cout.precision(13);
-    std::cout << std::scientific;
-    std::cout << "Error in temperature conversion mmHg->atm\n";
-    std::cout << "ref: " << work_ref->press << " inp: " << work_p1->press << std::endl;
-    return 1;
-  }
+
   //halir_print_workspace(work_ref);
   return 0;
 }

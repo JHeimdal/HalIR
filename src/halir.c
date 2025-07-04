@@ -45,7 +45,6 @@ halir_parseJSONinput(const char* const inputFile)
     infile = inputFile;
   }
 
-
   halir_workspace *ret_workspace = (halir_workspace*)malloc(sizeof(halir_workspace));
 
   cJSON *root = cJSON_Parse(infile);
@@ -419,6 +418,7 @@ halir_parseJSONinput(const char* const inputFile)
         /*printf("ndatapnts: %d\n", current_comp->hitran_head.ndatapnts);*/
       }
       /*for (int i=0; i < current_comp->hitran_head.ndatapnts; i++) {*/
+               /*//1 2  3  4  5  6  7  8  9 10 11 12 13 14 15 16 17 18 19 20 21*/
         /*printf("%d%d %f %e %f %f %f %f %f %f %s %s %s %s %s %s %s %f %f %f %f\n",*/
             /*current_comp->hitran_prms[i].molec_num,*/
             /*current_comp->hitran_prms[i].isotp_num,*/
@@ -497,7 +497,6 @@ int halir_test_calc(halir_workspace *work)
   for (int comp=0; comp < work->composition_length; comp++) {
     halir_HitranHead *head = &work->composition[comp]->hitran_head;
     halir_HitranLine *prms = work->composition[comp]->hitran_prms;
-
     q = work->composition[comp]->vmr;
     tfac = sqrtf(2*ln2*kb_si*T);
     // Allocate vectors used in the calculations

@@ -936,14 +936,6 @@ end:
   }
 }
 
-/**
- * @brief Finds the index of the nearest value in a vector to a given value
- *
- * @param v Vector to search in
- * @param val Value to search for
- *
- * @return Index of the nearest value in vector v to val
- */
 size_t find_nearest_index(gsl_vector_float *v, float val)
 {
   gsl_vector_float *tmp = gsl_vector_float_alloc(v->size);
@@ -955,13 +947,6 @@ size_t find_nearest_index(gsl_vector_float *v, float val)
   return idx;
 }
 
-/**
- * @brief
- *
- * @param work
- *
- * @return int error code
- */
 int halir_test_calc(halir_workspace *work)
 {
   double q296, qT;

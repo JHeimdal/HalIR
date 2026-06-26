@@ -4,6 +4,8 @@ Build*
 build*
 Debug*
 .cache*
+docs/html/
+docs/latex/
 
 # Vim files
 *.swp

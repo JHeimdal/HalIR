@@ -2,7 +2,6 @@
 #include <boost/json/value.hpp>
 #include <cstddef>
 #include <cstring>
-#include <ios>
 #include <iostream>
 #include <vector>
 #include <boost/json/src.hpp>
@@ -85,6 +84,9 @@ int main(int argc, char **argv)
     PRESS_PA_TO_ATM,
     PRESS_HPA_TO_ATM,
     PRESS_MMHG_TO_ATM,
+    ROI_TOO_MANY_VALUES,
+    ROI_NON_NUMERIC,
+    PNAME_TOO_LONG,
   };
 
   using namespace std;
@@ -207,9 +209,27 @@ int main(int argc, char **argv)
         //return 1;
       //}
       break;
+    case ROI_TOO_MANY_VALUES:
+      inp1.at_pointer("/input/sampleEnv/ROI") = {2000.0, 2245.0, 2300.0};
+      break;
+    case ROI_NON_NUMERIC:
+      inp1.at_pointer("/input/sampleEnv/ROI") = {2000.0, "bad"};
+      break;
+    case PNAME_TOO_LONG:
+      inp1.at_pointer("/input/project/pname") = std::string(PATH_LEN + 32, 'a');
+      break;
   }
   std::string inp2_str = json::serialize(inp1);
   work_p1 = halir_parseJSONinput(inp2_str.c_str());
+
+  if (test == ROI_TOO_MANY_VALUES || test == ROI_NON_NUMERIC || test == PNAME_TOO_LONG) {
+    if (work_p1 != NULL) {
+      std::cout << "Expected parser to reject invalid input" << std::endl;
+      return 1;
+    }
+    return 0;
+  }
+
   if (!compare_halir_workspace(work_ref, work_p1)) {
     std::cout << err_msg << std::endl;
     return 1;

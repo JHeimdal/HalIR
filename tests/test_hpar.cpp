@@ -12,7 +12,7 @@ namespace json = boost::json;
 int main(int argc, char **argv)
 {
   enum TEST {
-    TEMP_F_TO_K,
+    SMALL_HPAR,
   };
 
   using namespace std;
@@ -45,11 +45,7 @@ int main(int argc, char **argv)
         {"molec", "CO"},
         {"isotop", "Natural"},
         {"vmr", 5.921539600296e-05},
-        {"prmfile", ""} }, {
-        {"molec", "H2O"},
-        {"isotop", "Natural"},
-        {"vmr", 1.92e-03},
-        {"prmfile", ""}}}}
+        {"prmfile", ""} }, }}
       }
     }
   };
@@ -60,10 +56,7 @@ int main(int argc, char **argv)
   string err_msg;
 
   switch (test) {
-    case TEMP_F_TO_K:
-      inp1.at_pointer("/input/sampleEnv/temp") = 86;
-      inp1.at_pointer("/input/sampleEnv/tempU") = "F";
-      err_msg = "Error in temperature conversion F->K\n";
+    case SMALL_HPAR:
       break;
   }
   return 0;

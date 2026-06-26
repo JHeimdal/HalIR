@@ -1,8 +1,8 @@
 {
   "input": {
     "project": {
-            "pname": "CO_Test2",
-            "rootDir": "/home/jimmy/Programs/HalIR/Build/TestCalc/",
+            "pname": "CO_Test3",
+            "rootDir": "/home/jimmy/Programs/HalIR/Build/TestCalc3/",
             "hapi_db": "",
             "pcomments": "CO Test on some different concentrations",
             "pfiles": []
@@ -14,7 +14,7 @@
             "pressU": "atm",
             "pathL": 300.0,
             "pathLU": "m",
-            "ROI": [2000.0, 2245.0],
+            "ROI": [2172.0, 2174.0],
             "res": 0.1,
             "apod": "Boxcar",
             "fov": 0.1,
@@ -23,14 +23,9 @@
     },
     "composition": [
             {"molec": "CO",
-             "isotop": "Natural",
+             "isotop": "(12C)(16O)",
              "vmr": 5.921539600296e-05,
              "pressU": "mb",
-             "prmfile": ""},
-            {"molec": "H2O",
-             "isotop": "Natural",
-             "vmr": 9.21539600296e-04,
-             "pressU": "atm",
              "prmfile": ""}
     ]
   }

@@ -13,11 +13,25 @@
 
 #define halir_num double
 
+/**
+ * Enumerates the available apodization methods for the HALIR algorithm.
+ */
 typedef enum
 {
-  HALIR_BOXCAR,
-  HALIR_TRIANGLE,
-  HALIR_HAPPGENZEL,
+    /**
+     * Boxcar apodization method.
+     */
+    HALIR_BOXCAR,
+
+    /**
+     * Triangle apodization method.
+     */
+    HALIR_TRIANGLE,
+
+    /**
+     * Hanning-Papoulis-Genzel (HAPP) apodization method.
+     */
+    HALIR_HAPPGENZEL,
 } halir_apodization;
 
 typedef enum
@@ -26,26 +40,29 @@ typedef enum
   HALIR_ABSORBANCE,
 } halir_filetype;
 
+/**
+ * Enumerated type representing various units of measurement.
+ */
 typedef enum
 {
-  NONE,
-  ATM,
-  MBAR,
-  BAR,
-  PA,
-  HPA,
-  MMHG,
-  PPM,
-  PPT,
-  PPB,
-  MM,
-  CM,
-  DM,
-  M,
-  KM,
-  K,
-  C,
-  F,
+    NONE,  /**< Unknown or unspecified unit */
+    ATM,   /**< Atmospheres (unit of pressure) */
+    MBAR,  /**< Millibars (unit of pressure) */
+    BAR,   /**< Bars (unit of pressure) */
+    PA,    /**< Pascals (unit of pressure) */
+    HPA,   /**< Heighs of mercury (unit of pressure) */
+    MMHG,  /**< Millimeters of mercury (unit of pressure) */
+    PPM,   /**< Parts per million (unit of concentration) */
+    PPT,   /**< Parts per trillion (unit of concentration) */
+    PPB,   /**< Parts per billion (unit of concentration) */
+    MM,    /**< Millimeters (unit of length) */
+    CM,    /**< Centimeters (unit of length) */
+    DM,    /**< Decimeters (unit of length) */
+    M,     /**< Meters (unit of length) */
+    KM,    /**< Kilometers (unit of length) */
+    K,     /**< Kelvin (unit of temperature) */
+    C,     /**< Celsius (unit of temperature) */
+    F,     /**< Fahrenheit (unit of temperature) */
 } halir_Units;
 
 // Convert halir_Units to atm, cm, Kelvin

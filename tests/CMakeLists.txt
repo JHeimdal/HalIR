@@ -17,4 +17,9 @@ add_test(NAME input_units_test_MBAR_TO_ATM COMMAND $<TARGET_FILE:test_input> 3)
 add_test(NAME input_units_test_PA_TO_ATM COMMAND $<TARGET_FILE:test_input> 4)
 add_test(NAME input_units_test_HPA_TO_ATM COMMAND $<TARGET_FILE:test_input> 5)
 add_test(NAME input_units_test_MMHG_TO_ATM COMMAND $<TARGET_FILE:test_input> 6)
+add_test(NAME input_invalid_roi_too_many_values COMMAND $<TARGET_FILE:test_input> 7)
+add_test(NAME input_invalid_roi_non_numeric COMMAND $<TARGET_FILE:test_input> 8)
+add_test(NAME input_invalid_pname_too_long COMMAND $<TARGET_FILE:test_input> 9)
+
+add_test(NAME hpar_small_test COMMAND $<TARGET_FILE:test_hpar> 0)
 

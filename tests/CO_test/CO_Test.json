@@ -13,7 +13,7 @@
       "pressU": "atm",
       "pathL": 10.0,
       "pathLU": "cm",
-      "ROI": [2000.0, 2300.0],
+      "ROI": [2172.5, 2173.0],
       "res": 0.1,
       "apod": "Boxcar",
       "fov": 0.1,
@@ -21,7 +21,7 @@
       "bgfile": ""},
     "composition": [
       {"molec": "CO",
-       "isotop": "Natural",
+       "isotop": "(12C)(16O)",
        "vmr": 1.3e-3,
        "pressU": "ppm",
        "prmfile": "/home/jimmy/Programs/HalIR/tests/CO_test/CO.hpar"}

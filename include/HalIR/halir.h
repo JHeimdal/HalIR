@@ -87,7 +87,7 @@ double halir_Units_factors[] = {
   1.0, //CM,
 };
 
-char *halir_Units_to_str[] = {
+const char *halir_Units_to_str[] = {
   "NONE",
   "atm",
   "mbar",
@@ -274,6 +274,24 @@ typedef struct{
 } hair_spectra;
 
 halir_workspace* halir_parseJSONinput(const char* const inputFile);
+halir_workspace* halir_workspace_create(void);
+void halir_workspace_free(halir_workspace *work);
+int halir_workspace_set_project(halir_workspace *work, const char *pname, const char *rootDir, const char *pcomments);
+int halir_workspace_add_project_file(halir_workspace *work, const char *path);
+int halir_workspace_set_sample_env(halir_workspace *work,
+                                   double temp, halir_Units tempU,
+                                   double press, halir_Units pressU,
+                                   double pathL, halir_Units pathLU,
+                                   double roi_low, double roi_high,
+                                   double res, double fov,
+                                   halir_apodization apod,
+                                   halir_filetype ftype,
+                                   const char *bgfile);
+int halir_workspace_add_composition(halir_workspace *work, const char *molec, const char *isotop, size_t *out_index);
+int halir_compound_set_vmr(halir_workspace *work, size_t comp_index, double vmr);
+int halir_compound_set_concentration(halir_workspace *work, size_t comp_index, double conc, halir_Units concU);
+int halir_compound_load_prmfile(halir_workspace *work, size_t comp_index, const char *prmfile_path);
+int halir_workspace_validate(halir_workspace *work);
 size_t find_nearest_index(gsl_vector_float *v, float val);
 int halir_test_calc(halir_workspace *work);
 

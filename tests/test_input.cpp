@@ -80,6 +80,66 @@ bool replace_once(std::string &text, const std::string &needle, const std::strin
   return true;
 }
 
+std::string build_input_json(const std::string &pname,
+                             const std::string &temp,
+                             const std::string &temp_unit,
+                             const std::string &press,
+                             const std::string &press_unit,
+                             const std::string &roi)
+{
+  // Keep test fixture generation dependency-free so CI does not need Boost.
+  std::string json_text = R"({
+    "input": {
+      "project": {
+        "pname": "__PNAME__",
+        "rootDir": "/home/jimmy/Programs/HalIR/tests/TestCalc/",
+        "hapi_db": "",
+        "pcomments": "CO Test on some different concentrations",
+        "pfiles": [null]
+      },
+      "sampleEnv": {
+        "temp": __TEMP__,
+        "tempU": "__TEMP_UNIT__",
+        "press": __PRESS__,
+        "pressU": "__PRESS_UNIT__",
+        "pathL": 300.0,
+        "pathLU": "m",
+        "ROI": __ROI__,
+        "res": 0.1,
+        "apod": "Boxcar",
+        "fov": 0.1,
+        "ftype": "Transmission",
+        "bgfile": ""
+      },
+      "composition": [
+        {
+          "molec": "CO",
+          "isotop": "Natural",
+          "vmr": 5.921539600296e-05,
+          "prmfile": ""
+        },
+        {
+          "molec": "H2O",
+          "isotop": "Natural",
+          "vmr": 1.92e-03,
+          "prmfile": ""
+        }
+      ]
+    }
+  })";
+
+  if (!replace_once(json_text, "__PNAME__", pname) ||
+      !replace_once(json_text, "__TEMP__", temp) ||
+      !replace_once(json_text, "__TEMP_UNIT__", temp_unit) ||
+      !replace_once(json_text, "__PRESS__", press) ||
+      !replace_once(json_text, "__PRESS_UNIT__", press_unit) ||
+      !replace_once(json_text, "__ROI__", roi)) {
+    return std::string();
+  }
+
+  return json_text;
+}
+
 int main(int argc, char **argv)
 {
   enum TEST {
@@ -574,75 +634,52 @@ int main(int argc, char **argv)
     halir_workspace_free(work);
     return 0;
   }
-  const std::string ref1_str = R"({"input":{"project":{"pname":"CO_Test2","rootDir":"/home/jimmy/Programs/HalIR/tests/TestCalc/","hapi_db":"","pcomments":"CO Test on some different concentrations","pfiles":[null]},"sampleEnv":{"temp":303.15,"tempU":"K","press":1.0,"pressU":"atm","pathL":300.0,"pathLU":"m","ROI":[2000.0,2245.0],"res":0.1,"apod":"Boxcar","fov":0.1,"ftype":"Transmission","bgfile":""},"composition":[{"molec":"CO","isotop":"Natural","vmr":5.921539600296e-05,"prmfile":""},{"molec":"H2O","isotop":"Natural","vmr":1.92e-03,"prmfile":""}]}})";
+  std::string pname = "CO_Test2";
+  std::string temp = "303.15";
+  std::string temp_unit = "K";
+  std::string press = "1.0";
+  std::string press_unit = "atm";
+  std::string roi = "[2000.0, 2245.0]";
 
+  const std::string ref1_str = build_input_json(pname, temp, temp_unit, press, press_unit, roi);
   halir_workspace *work_p1;
   halir_workspace *work_ref = halir_parseJSONinput(ref1_str.c_str());
   string err_msg;
-  std::string inp2_str = ref1_str;
 
   switch (test) {
     case TEMP_F_TO_K:
-      if (!replace_once(inp2_str, "\"temp\":303.15", "\"temp\":86") ||
-          !replace_once(inp2_str, "\"tempU\":\"K\"", "\"tempU\":\"F\"")) {
-        std::cout << "Failed to prepare F->K input" << std::endl;
-        halir_workspace_free(work_ref);
-        return 1;
-      }
+      temp = "86";
+      temp_unit = "F";
       err_msg = "Error in temperature conversion F->K\n";
       break;
     case TEMP_C_TO_K:
-      if (!replace_once(inp2_str, "\"temp\":303.15", "\"temp\":30") ||
-          !replace_once(inp2_str, "\"tempU\":\"K\"", "\"tempU\":\"C\"")) {
-        std::cout << "Failed to prepare C->K input" << std::endl;
-        halir_workspace_free(work_ref);
-        return 1;
-      }
+      temp = "30";
+      temp_unit = "C";
       err_msg =  "Error in temperature conversion C->K\n";
       break;
     case PRESS_BAR_TO_ATM:
-      if (!replace_once(inp2_str, "\"press\":1.0", "\"press\":1.0132500") ||
-          !replace_once(inp2_str, "\"pressU\":\"atm\"", "\"pressU\":\"bar\"")) {
-        std::cout << "Failed to prepare bar->atm input" << std::endl;
-        halir_workspace_free(work_ref);
-        return 1;
-      }
+      press = "1.0132500";
+      press_unit = "bar";
       err_msg = "Error in temperature conversion bar->atm\n";
       break;
     case PRESS_MBAR_TO_ATM:
-      if (!replace_once(inp2_str, "\"press\":1.0", "\"press\":1.0132500e3") ||
-          !replace_once(inp2_str, "\"pressU\":\"atm\"", "\"pressU\":\"mbar\"")) {
-        std::cout << "Failed to prepare mbar->atm input" << std::endl;
-        halir_workspace_free(work_ref);
-        return 1;
-      }
+      press = "1.0132500e3";
+      press_unit = "mbar";
       err_msg = "Error in temperature conversion mbar->atm\n";
       break;
     case PRESS_PA_TO_ATM:
-      if (!replace_once(inp2_str, "\"press\":1.0", "\"press\":1.0132500e5") ||
-          !replace_once(inp2_str, "\"pressU\":\"atm\"", "\"pressU\":\"pa\"")) {
-        std::cout << "Failed to prepare pa->atm input" << std::endl;
-        halir_workspace_free(work_ref);
-        return 1;
-      }
+      press = "1.0132500e5";
+      press_unit = "pa";
       err_msg = "Error in temperature conversion pa->atm\n";
       break;
     case PRESS_HPA_TO_ATM:
-      if (!replace_once(inp2_str, "\"press\":1.0", "\"press\":1.0132500e3") ||
-          !replace_once(inp2_str, "\"pressU\":\"atm\"", "\"pressU\":\"hpa\"")) {
-        std::cout << "Failed to prepare hpa->atm input" << std::endl;
-        halir_workspace_free(work_ref);
-        return 1;
-      }
+      press = "1.0132500e3";
+      press_unit = "hpa";
       err_msg = "Error in temperature conversion hpa->atm\n";
       break;
     case PRESS_MMHG_TO_ATM:
-      if (!replace_once(inp2_str, "\"press\":1.0", "\"press\":760.00000") ||
-          !replace_once(inp2_str, "\"pressU\":\"atm\"", "\"pressU\":\"mmhg\"")) {
-        std::cout << "Failed to prepare mmhg->atm input" << std::endl;
-        halir_workspace_free(work_ref);
-        return 1;
-      }
+      press = "760.00000";
+      press_unit = "mmhg";
       err_msg = "Error in temperature conversion mmHg->atm\n";
       //if (!compare_halir_workspace(work_ref, work_p1)) {
         //std::cout.precision(13);
@@ -652,31 +689,24 @@ int main(int argc, char **argv)
       //}
       break;
     case ROI_TOO_MANY_VALUES:
-      if (!replace_once(inp2_str, "\"ROI\":[2000.0,2245.0]", "\"ROI\":[2000.0,2245.0,2300.0]")) {
-        std::cout << "Failed to prepare ROI_TOO_MANY_VALUES input" << std::endl;
-        halir_workspace_free(work_ref);
-        return 1;
-      }
+      roi = "[2000.0, 2245.0, 2300.0]";
       break;
     case ROI_NON_NUMERIC:
-      if (!replace_once(inp2_str, "\"ROI\":[2000.0,2245.0]", "\"ROI\":[2000.0,\"bad\"]")) {
-        std::cout << "Failed to prepare ROI_NON_NUMERIC input" << std::endl;
-        halir_workspace_free(work_ref);
-        return 1;
-      }
+      roi = "[2000.0, \"bad\"]";
       break;
     case PNAME_TOO_LONG:
-      if (!replace_once(inp2_str,
-                        "\"pname\":\"CO_Test2\"",
-                        "\"pname\":\"" + std::string(PATH_LEN + 32, 'a') + "\"")) {
-        std::cout << "Failed to prepare PNAME_TOO_LONG input" << std::endl;
-        halir_workspace_free(work_ref);
-        return 1;
-      }
+      pname = std::string(PATH_LEN + 32, 'a');
       break;
   }
   if (work_ref == NULL) {
     std::cout << "Reference parser input should be valid" << std::endl;
+    return 1;
+  }
+
+  std::string inp2_str = build_input_json(pname, temp, temp_unit, press, press_unit, roi);
+  if (inp2_str.empty()) {
+    std::cout << "Failed to prepare parser input" << std::endl;
+    halir_workspace_free(work_ref);
     return 1;
   }
 

@@ -1,17 +1,14 @@
-#include <boost/json/serialize.hpp>
-#include <boost/json/value.hpp>
+#include <algorithm>
+#include <cmath>
 #include <cstddef>
 #include <cstring>
 #include <iostream>
-#include <vector>
-#include <boost/json/src.hpp>
 #include <string>
+#include <vector>
 
 extern "C" {
 #include "HalIR/halir.h"
 }
-
-namespace json = boost::json;
 
 bool compare_halir_num(halir_num *A, halir_num *B) {
   //double EPSILON = std::numeric_limits<double>::epsilon();
@@ -72,6 +69,76 @@ bool compare_halir_workspace(halir_workspace *ref, halir_workspace *test) {
     return false;
   }
   return true;
+}
+
+bool replace_once(std::string &text, const std::string &search_text, const std::string &replacement) {
+  const std::size_t pos = text.find(search_text);
+  if (pos == std::string::npos)
+    return false;
+
+  text.replace(pos, search_text.size(), replacement);
+  return true;
+}
+
+std::string build_input_json(const std::string &pname,
+                             const std::string &temp,
+                             const std::string &temp_unit,
+                             const std::string &press,
+                             const std::string &press_unit,
+                             const std::string &roi)
+{
+  // Keep test fixture generation dependency-free so CI does not need Boost.
+  std::string json_text = R"({
+    "input": {
+      "project": {
+        "pname": "__PNAME__",
+        "rootDir": "TestCalc",
+        "hapi_db": "",
+        "pcomments": "CO Test on some different concentrations",
+        "pfiles": [null]
+      },
+      "sampleEnv": {
+        "temp": __TEMP__,
+        "tempU": "__TEMP_UNIT__",
+        "press": __PRESS__,
+        "pressU": "__PRESS_UNIT__",
+        "pathL": 300.0,
+        "pathLU": "m",
+        "ROI": __ROI__,
+        "res": 0.1,
+        "apod": "Boxcar",
+        "fov": 0.1,
+        "ftype": "Transmission",
+        "bgfile": ""
+      },
+      "composition": [
+        {
+          "molec": "CO",
+          "isotop": "Natural",
+          "vmr": 5.921539600296e-05,
+          "prmfile": ""
+        },
+        {
+          "molec": "H2O",
+          "isotop": "Natural",
+          "vmr": 1.92e-03,
+          "prmfile": ""
+        }
+      ]
+    }
+  })";
+
+  if (!replace_once(json_text, "__PNAME__", pname) ||
+      !replace_once(json_text, "__TEMP__", temp) ||
+      !replace_once(json_text, "__TEMP_UNIT__", temp_unit) ||
+      !replace_once(json_text, "__PRESS__", press) ||
+      !replace_once(json_text, "__PRESS_UNIT__", press_unit) ||
+      !replace_once(json_text, "__ROI__", roi)) {
+    std::cerr << "Failed to populate JSON test fixture template" << std::endl;
+    return {};
+  }
+
+  return json_text;
 }
 
 int main(int argc, char **argv)
@@ -568,114 +635,53 @@ int main(int argc, char **argv)
     halir_workspace_free(work);
     return 0;
   }
-  json::value ref1 = {
-    { "input", {
-      {"project", {
-        {"pname", "CO_Test2"},
-        {"rootDir", "/home/jimmy/Programs/HalIR/tests/TestCalc/"},
-        {"hapi_db", ""},
-        {"pcomments", "CO Test on some different concentrations"},
-        {"pfiles", {nullptr}}}},
-      {"sampleEnv", {
-        {"temp", 303.15},
-        {"tempU", "K"},
-        {"press", 1.0},
-        {"pressU", "atm"},
-        {"pathL", 300.0},
-        {"pathLU", "m"},
-        {"ROI", {2000.0, 2245.0}},
-        {"res", 0.1},
-        {"apod", "Boxcar"},
-        {"fov", 0.1},
-        {"ftype", "Transmission"},
-        {"bgfile", ""}}},
-      {"composition", { {
-        {"molec", "CO"},
-        {"isotop", "Natural"},
-        {"vmr", 5.921539600296e-05},
-        {"prmfile", ""} }, {
-        {"molec", "H2O"},
-        {"isotop", "Natural"},
-        {"vmr", 1.92e-03},
-        {"prmfile", ""}}}}
-      }
-    }
-  };
+  std::string pname = "CO_Test2";
+  std::string temp = "303.15";
+  std::string temp_unit = "K";
+  std::string press = "1.0";
+  std::string press_unit = "atm";
+  std::string roi = "[2000.0, 2245.0]";
 
-  json::value inp1 = {
-    { "input", {
-      {"project", {
-        {"pname", "CO_Test2"},
-        {"rootDir", "/home/jimmy/Programs/HalIR/tests/TestCalc/"},
-        {"hapi_db", ""},
-        {"pcomments", "CO Test on some different concentrations"},
-        {"pfiles", {nullptr}}}},
-      {"sampleEnv", {
-        {"temp", 303.15},
-        {"tempU", "K"},
-        {"press", 1.0},
-        {"pressU", "atm"},
-        {"pathL", 300.0},
-        {"pathLU", "m"},
-        {"ROI", {2000.0, 2245.0}},
-        {"res", 0.1},
-        {"apod", "Boxcar"},
-        {"fov", 0.1},
-        {"ftype", "Transmission"},
-        {"bgfile", ""}}},
-      {"composition", { {
-        {"molec", "CO"},
-        {"isotop", "Natural"},
-        {"vmr", 5.921539600296e-05},
-        {"prmfile", ""} }, {
-        {"molec", "H2O"},
-        {"isotop", "Natural"},
-        {"vmr", 1.92e-03},
-        {"prmfile", ""}}}}
-      }
-    }
-  };
-
+  const std::string ref1_str = build_input_json(pname, temp, temp_unit, press, press_unit, roi);
   halir_workspace *work_p1;
-  std::string ref1_str = json::serialize(inp1);
   halir_workspace *work_ref = halir_parseJSONinput(ref1_str.c_str());
   string err_msg;
 
   switch (test) {
     case TEMP_F_TO_K:
-      inp1.at_pointer("/input/sampleEnv/temp") = 86;
-      inp1.at_pointer("/input/sampleEnv/tempU") = "F";
+      temp = "86";
+      temp_unit = "F";
       err_msg = "Error in temperature conversion F->K\n";
       break;
     case TEMP_C_TO_K:
-      inp1.at_pointer("/input/sampleEnv/temp") = 30;
-      inp1.at_pointer("/input/sampleEnv/tempU") = "C";
+      temp = "30";
+      temp_unit = "C";
       err_msg =  "Error in temperature conversion C->K\n";
       break;
     case PRESS_BAR_TO_ATM:
-      inp1.at_pointer("/input/sampleEnv/press") = 1.0132500;
-      inp1.at_pointer("/input/sampleEnv/pressU") = "bar";
-      err_msg = "Error in temperature conversion bar->atm\n";
+      press = "1.0132500";
+      press_unit = "bar";
+      err_msg = "Error in pressure conversion bar->atm\n";
       break;
     case PRESS_MBAR_TO_ATM:
-      inp1.at_pointer("/input/sampleEnv/press") = 1.0132500e3;
-      inp1.at_pointer("/input/sampleEnv/pressU") = "mbar";
-      err_msg = "Error in temperature conversion mbar->atm\n";
+      press = "1.0132500e3";
+      press_unit = "mbar";
+      err_msg = "Error in pressure conversion mbar->atm\n";
       break;
     case PRESS_PA_TO_ATM:
-      inp1.at_pointer("/input/sampleEnv/press") = 1.0132500e5;
-      inp1.at_pointer("/input/sampleEnv/pressU") = "pa";
-      err_msg = "Error in temperature conversion pa->atm\n";
+      press = "1.0132500e5";
+      press_unit = "pa";
+      err_msg = "Error in pressure conversion pa->atm\n";
       break;
     case PRESS_HPA_TO_ATM:
-      inp1.at_pointer("/input/sampleEnv/press") = 1.0132500e3;
-      inp1.at_pointer("/input/sampleEnv/pressU") = "hpa";
-      err_msg = "Error in temperature conversion hpa->atm\n";
+      press = "1.0132500e3";
+      press_unit = "hpa";
+      err_msg = "Error in pressure conversion hpa->atm\n";
       break;
     case PRESS_MMHG_TO_ATM:
-      inp1.at_pointer("/input/sampleEnv/press") = 760.00000;
-      inp1.at_pointer("/input/sampleEnv/pressU") = "mmhg";
-      err_msg = "Error in temperature conversion mmHg->atm\n";
+      press = "760.00000";
+      press_unit = "mmhg";
+      err_msg = "Error in pressure conversion mmHg->atm\n";
       //if (!compare_halir_workspace(work_ref, work_p1)) {
         //std::cout.precision(13);
         //std::cout << std::scientific;
@@ -684,16 +690,27 @@ int main(int argc, char **argv)
       //}
       break;
     case ROI_TOO_MANY_VALUES:
-      inp1.at_pointer("/input/sampleEnv/ROI") = {2000.0, 2245.0, 2300.0};
+      roi = "[2000.0, 2245.0, 2300.0]";
       break;
     case ROI_NON_NUMERIC:
-      inp1.at_pointer("/input/sampleEnv/ROI") = {2000.0, "bad"};
+      roi = "[2000.0, \"bad\"]";
       break;
     case PNAME_TOO_LONG:
-      inp1.at_pointer("/input/project/pname") = std::string(PATH_LEN + 32, 'a');
+      pname = std::string(PATH_LEN + 32, 'a');
       break;
   }
-  std::string inp2_str = json::serialize(inp1);
+  if (work_ref == NULL) {
+    std::cout << "Reference parser input should be valid" << std::endl;
+    return 1;
+  }
+
+  std::string inp2_str = build_input_json(pname, temp, temp_unit, press, press_unit, roi);
+  if (inp2_str.empty()) {
+    std::cout << "Failed to prepare parser input" << std::endl;
+    halir_workspace_free(work_ref);
+    return 1;
+  }
+
   work_p1 = halir_parseJSONinput(inp2_str.c_str());
 
   if (test == ROI_TOO_MANY_VALUES || test == ROI_NON_NUMERIC || test == PNAME_TOO_LONG) {

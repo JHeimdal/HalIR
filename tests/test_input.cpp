@@ -71,12 +71,12 @@ bool compare_halir_workspace(halir_workspace *ref, halir_workspace *test) {
   return true;
 }
 
-bool replace_once(std::string &text, const std::string &needle, const std::string &replacement) {
-  const std::size_t pos = text.find(needle);
+bool replace_once(std::string &text, const std::string &search_text, const std::string &replacement) {
+  const std::size_t pos = text.find(search_text);
   if (pos == std::string::npos)
     return false;
 
-  text.replace(pos, needle.size(), replacement);
+  text.replace(pos, search_text.size(), replacement);
   return true;
 }
 
@@ -134,7 +134,7 @@ std::string build_input_json(const std::string &pname,
       !replace_once(json_text, "__PRESS__", press) ||
       !replace_once(json_text, "__PRESS_UNIT__", press_unit) ||
       !replace_once(json_text, "__ROI__", roi)) {
-    return std::string();
+    return {};
   }
 
   return json_text;

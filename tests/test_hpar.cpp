@@ -4,13 +4,10 @@
 #include <iostream>
 #include <vector>
 #include <string>
-#include <boost/json/src.hpp>
 
 extern "C" {
 #include "HalIR/halir.h"
 }
-
-namespace json = boost::json;
 
 namespace {
 
@@ -73,6 +70,28 @@ bool write_missing_line_data_prmfile(const std::filesystem::path &file_path)
   return out.good();
 }
 
+bool write_valid_prmfile(const std::filesystem::path &file_path)
+{
+  halir_HitranHead head = {};
+  halir_HitranLine line = {};
+  const int molecule_id = 1;
+  std::ofstream out(file_path, std::ios::binary | std::ios::trunc);
+  if (!out.is_open()) {
+    return false;
+  }
+
+  head.nisotp = 1;
+  head.ndatapnts = 1;
+  line.molec_num = molecule_id;
+  line.isotp_num = 1;
+  line.trans_mu = 2100.0;
+
+  out.write(reinterpret_cast<const char*>(&head), sizeof(head));
+  out.write(reinterpret_cast<const char*>(&molecule_id), sizeof(molecule_id));
+  out.write(reinterpret_cast<const char*>(&line), sizeof(line));
+  return out.good();
+}
+
 } // namespace
 
 int main(int argc, char **argv)
@@ -90,11 +109,10 @@ int main(int argc, char **argv)
   vector<string> args(argv + 1, argv + argc);
   TEST test = (TEST)stoi(args[0]);
 
-  const std::string valid_prmfile = "/home/jimmy/Programs/HalIR/tests/CO_test/CO.hpar";
   halir_workspace *workspace = build_test_workspace();
-  std::filesystem::path truncated_path;
+  std::filesystem::path fixture_path;
   bool temporary_fixture_created = false;
-  std::string test_prmfile = valid_prmfile;
+  std::string test_prmfile;
 
   if (workspace == nullptr) {
     std::cout << "Failed to build test workspace" << std::endl;
@@ -110,40 +128,47 @@ int main(int argc, char **argv)
 
   switch (test) {
     case VALID_HPAR:
-      test_prmfile = valid_prmfile;
+      fixture_path = std::filesystem::temp_directory_path() / "halir_valid_test.hpar";
+      if (!write_valid_prmfile(fixture_path)) {
+        std::cout << "Could not create valid prmfile fixture" << std::endl;
+        halir_workspace_free(workspace);
+        return 1;
+      }
+      temporary_fixture_created = true;
+      test_prmfile = fixture_path.string();
       break;
     case MISSING_HPAR:
-      test_prmfile = "/home/jimmy/Programs/HalIR/tests/CO_test/does_not_exist.hpar";
+      test_prmfile = (std::filesystem::temp_directory_path() / "halir_missing_prmfile_test.hpar").string();
       break;
     case TRUNCATED_HPAR:
-      truncated_path = std::filesystem::temp_directory_path() / "halir_truncated_test.hpar";
-      if (!write_truncated_prmfile(truncated_path)) {
+      fixture_path = std::filesystem::temp_directory_path() / "halir_truncated_test.hpar";
+      if (!write_truncated_prmfile(fixture_path)) {
         std::cout << "Could not create truncated prmfile fixture" << std::endl;
         halir_workspace_free(workspace);
         return 1;
       }
       temporary_fixture_created = true;
-      test_prmfile = truncated_path.string();
+      test_prmfile = fixture_path.string();
       break;
     case HEADER_ONLY_HPAR:
-      truncated_path = std::filesystem::temp_directory_path() / "halir_header_only_test.hpar";
-      if (!write_header_only_prmfile(truncated_path)) {
+      fixture_path = std::filesystem::temp_directory_path() / "halir_header_only_test.hpar";
+      if (!write_header_only_prmfile(fixture_path)) {
         std::cout << "Could not create header-only prmfile fixture" << std::endl;
         halir_workspace_free(workspace);
         return 1;
       }
       temporary_fixture_created = true;
-      test_prmfile = truncated_path.string();
+      test_prmfile = fixture_path.string();
       break;
     case MISSING_LINE_DATA_HPAR:
-      truncated_path = std::filesystem::temp_directory_path() / "halir_missing_line_data_test.hpar";
-      if (!write_missing_line_data_prmfile(truncated_path)) {
+      fixture_path = std::filesystem::temp_directory_path() / "halir_missing_line_data_test.hpar";
+      if (!write_missing_line_data_prmfile(fixture_path)) {
         std::cout << "Could not create missing-line-data prmfile fixture" << std::endl;
         halir_workspace_free(workspace);
         return 1;
       }
       temporary_fixture_created = true;
-      test_prmfile = truncated_path.string();
+      test_prmfile = fixture_path.string();
       break;
   }
 
@@ -152,25 +177,37 @@ int main(int argc, char **argv)
   if (test == VALID_HPAR) {
     if (load_result != 0) {
       std::cout << "Expected valid prmfile to load" << std::endl;
+      if (temporary_fixture_created) {
+        std::filesystem::remove(fixture_path);
+      }
       halir_workspace_free(workspace);
       return 1;
     }
     if (workspace->composition[comp_index]->hitran_prms == nullptr) {
       std::cout << "Expected prmfile spectral lines to load" << std::endl;
+      if (temporary_fixture_created) {
+        std::filesystem::remove(fixture_path);
+      }
       halir_workspace_free(workspace);
       return 1;
     }
     if (workspace->composition[comp_index]->hitran_head.ndatapnts <= 0) {
       std::cout << "Expected prmfile to expose positive line count" << std::endl;
+      if (temporary_fixture_created) {
+        std::filesystem::remove(fixture_path);
+      }
       halir_workspace_free(workspace);
       return 1;
+    }
+    if (temporary_fixture_created) {
+      std::filesystem::remove(fixture_path);
     }
     halir_workspace_free(workspace);
     return 0;
   }
 
   if (temporary_fixture_created) {
-    std::filesystem::remove(truncated_path);
+    std::filesystem::remove(fixture_path);
   }
 
   if (load_result == 0) {

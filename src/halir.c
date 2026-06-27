@@ -9,9 +9,9 @@
 #include <ctype.h>
 #include <math.h>
 
-#include "HalIR/halir.h"
-#include "HalIR/tips.h"
-#include "HalIR/cJSON.h"
+#include <HalIR/halir.h>
+#include <HalIR/tips.h>
+#include <HalIR/cJSON.h>
 #include <cerf.h>
 
 static int copy_string_checked(char *dst, size_t dst_size, const char *src, const char *field_name)

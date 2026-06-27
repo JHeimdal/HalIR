@@ -92,7 +92,7 @@ std::string build_input_json(const std::string &pname,
     "input": {
       "project": {
         "pname": "__PNAME__",
-        "rootDir": "/home/jimmy/Programs/HalIR/tests/TestCalc/",
+        "rootDir": "/tmp/HalIR/tests/TestCalc/",
         "hapi_db": "",
         "pcomments": "CO Test on some different concentrations",
         "pfiles": [null]
@@ -660,27 +660,27 @@ int main(int argc, char **argv)
     case PRESS_BAR_TO_ATM:
       press = "1.0132500";
       press_unit = "bar";
-      err_msg = "Error in temperature conversion bar->atm\n";
+      err_msg = "Error in pressure conversion bar->atm\n";
       break;
     case PRESS_MBAR_TO_ATM:
       press = "1.0132500e3";
       press_unit = "mbar";
-      err_msg = "Error in temperature conversion mbar->atm\n";
+      err_msg = "Error in pressure conversion mbar->atm\n";
       break;
     case PRESS_PA_TO_ATM:
       press = "1.0132500e5";
       press_unit = "pa";
-      err_msg = "Error in temperature conversion pa->atm\n";
+      err_msg = "Error in pressure conversion pa->atm\n";
       break;
     case PRESS_HPA_TO_ATM:
       press = "1.0132500e3";
       press_unit = "hpa";
-      err_msg = "Error in temperature conversion hpa->atm\n";
+      err_msg = "Error in pressure conversion hpa->atm\n";
       break;
     case PRESS_MMHG_TO_ATM:
       press = "760.00000";
       press_unit = "mmhg";
-      err_msg = "Error in temperature conversion mmHg->atm\n";
+      err_msg = "Error in pressure conversion mmHg->atm\n";
       //if (!compare_halir_workspace(work_ref, work_p1)) {
         //std::cout.precision(13);
         //std::cout << std::scientific;

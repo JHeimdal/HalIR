@@ -14,6 +14,7 @@ include(FetchContent)
 
 find_package(GSL)
 find_package(cerf)
+find_package(OpenMP COMPONENTS C QUIET)
 find_package(Doxygen QUIET)
 
 add_subdirectory(src)

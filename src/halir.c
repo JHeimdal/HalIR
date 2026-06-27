@@ -14,6 +14,10 @@
 #include <HalIR/cJSON.h>
 #include <cerf.h>
 
+#ifdef HALIR_HAVE_OPENMP
+#include <omp.h>
+#endif
+
 static int copy_string_checked(char *dst, size_t dst_size, const char *src, const char *field_name)
 {
   size_t src_len;
@@ -445,6 +449,8 @@ copy_compound_metadata(const halir_compound *src, halir_compound *dst)
   memcpy(dst->prmfile, src->prmfile, sizeof(dst->prmfile));
   dst->hitran_head = src->hitran_head;
   dst->hitran_head.molecs = NULL;
+  dst->hitran_head.nisotp = 0;
+  dst->hitran_head.ndatapnts = 0;
   dst->hitran_prms = NULL;
 }
 
@@ -1067,11 +1073,11 @@ halir_result *halir_calculate_result(halir_workspace *work)
   const double kb_si = 1.3806503e-23; // J/K
   const double kb_erg = 1.3806503e-16; // erg/K
   const double invkb_si = 1./kb_si; // K/J
-  const double c_si = 299792458.; // m/s
-  const double c_erg = 29979245800.; // cm/s
-  const double atmmass_si=1.6605e-27; // g
-  const double hc_erg = 6.62607015e-27*c_erg;
-  const double c1_erg = hc_erg/kb_erg;
+  const double c_si = 299792458.; // m/s — SI speed of light; used in MM (molecular speed term)
+  const double c_erg = 29979245800.; // cm/s — CGS speed of light; used via hc_erg
+  const double atmmass_si=1.6605e-27; // kg/amu — atomic mass unit; used in MM
+  const double hc_erg = 6.62607015e-27*c_erg; // h*c in erg*cm
+  const double c1_erg = hc_erg/kb_erg; // second radiation constant hc/k in cm*K
   const double pi = 3.14159265358979;
   const double ln2 = log(2);
   const double sqrt_pi = sqrt(pi);
@@ -1110,8 +1116,14 @@ halir_result *halir_calculate_result(halir_workspace *work)
     gsl_vector_float *taB = NULL;
     gsl_vector_float *alphaD = NULL;
     gsl_vector_float *alphaL = NULL;
-    gsl_vector_float *mu = NULL;
     gsl_vector_float *y = NULL;
+    double *line_vc = NULL;
+    double *line_S = NULL;
+    double *line_scale = NULL;
+    double *line_aL = NULL;
+    size_t *line_start = NULL;
+    size_t *line_end = NULL;
+    double *thread_buf = NULL;
     size_t mu_size = 0;
 
     if ((prms == NULL) || (head->ndatapnts <= 0)) {
@@ -1122,7 +1134,7 @@ halir_result *halir_calculate_result(halir_workspace *work)
     copy_compound_metadata(work->composition[comp], &result->spectra[comp].composition);
 
     q = work->composition[comp]->vmr;
-    tfac = sqrtf(2*ln2*kb_si*T);
+    tfac = sqrt(2*ln2*kb_si*T);
     // Allocate vectors used in the calculations
     v0 = gsl_vector_float_alloc(head->ndatapnts);
     p_S = gsl_vector_float_alloc(head->ndatapnts);
@@ -1166,14 +1178,14 @@ halir_result *halir_calculate_result(halir_workspace *work)
       fprintf(stderr, "Invalid line widths produced non-positive sampling step\n");
       goto comp_error;
     }
-    mu_off1 = ceilf(50*GSL_MAX(alphaD_max, alphaL_max));
+    mu_off1 = ceil(50*GSL_MAX(alphaD_max, alphaL_max));
     if ((!isfinite(mu_off1)) || (mu_off1 < 0.0)) {
       fprintf(stderr, "Invalid line widths produced invalid sampling offset\n");
       goto comp_error;
     }
 
     /*printf("mu_step: %f mu_off1: %f\n", mu_step, mu_off1);*/
-    mu_size = (size_t)ceilf(((work->ROI[1]-work->ROI[0])+2*mu_off1)/mu_step);
+    mu_size = (size_t)ceil(((work->ROI[1]-work->ROI[0])+2*mu_off1)/mu_step);
     if (mu_size < 2) {
       mu_size = 2;
     }
@@ -1182,18 +1194,9 @@ halir_result *halir_calculate_result(halir_workspace *work)
       fprintf(stderr, "Invalid final sampling step\n");
       goto comp_error;
     }
-    mu = gsl_vector_float_alloc(mu_size);
-    if (mu == NULL) {
-      fprintf(stderr, "Failed to allocate mu grid for composition index %zu\n", comp);
-      goto comp_error;
-    }
-    float start_value = work->ROI[0]-mu_off1;
-    for (size_t i=0; i < mu_size; i++) {
-      gsl_vector_float_set(mu, i, start_value+i*mu_step);
-    }
-    size_t off1 = (size_t)ceilf(mu_off1/mu_step);
+    double start_value = work->ROI[0]-mu_off1;
+    size_t off1 = (size_t)ceil(mu_off1/mu_step);
     /*printf("mu_step: %f mu_size: %ld\n", mu_step, mu_size);*/
-    /*printf("mu[0]: %f mu[-1]: %f\n", gsl_vector_float_get(mu, 0), gsl_vector_float_get(mu, mu_size-1));*/
 
     y = gsl_vector_float_calloc(mu_size);
     if (y == NULL) {
@@ -1203,28 +1206,125 @@ halir_result *halir_calculate_result(halir_workspace *work)
     // Print some information (possible in later callback?)
     /*printf("alphaL_min: %f alphaL_max %f\n", alphaL_min, alphaL_max);*/
     /*printf("alphaD_min: %f alphaD_max %f\n", alphaD_min, alphaD_max);*/
-    for (int mm=0; mm < head->ndatapnts; mm++) {
-          vc = gsl_vector_float_get(v0, mm);
-          size_t idx = find_nearest_index(mu, vc);
-          q296 = tips_2020(prms[mm].molec_num, prms[mm].isotp_num, 296);
-          qT = tips_2020(prms[mm].molec_num, prms[mm].isotp_num, T);
-          S = prms[mm].line_I * q296/qT * exp(c1_erg*prms[mm].low_state_en/T)/exp(c1_erg*prms[mm].low_state_en/296)*((1-exp(-c1_erg*vc/T))/(1-exp(-c1_erg*vc/296)));
-          float a_D = gsl_vector_float_get(alphaD, mm);
-          float a_L = gsl_vector_float_get(alphaL, mm);
 
-          if (a_D <= 0.0f || !isfinite(a_D) || !isfinite(a_L) || !isfinite(S)) {
-            continue;
-          }
+    // Per-line parameter arrays for the line-profile phase
+    line_vc = (double*)malloc((size_t)head->ndatapnts * sizeof(double));
+    line_S = (double*)malloc((size_t)head->ndatapnts * sizeof(double));
+    line_scale = (double*)malloc((size_t)head->ndatapnts * sizeof(double));
+    line_aL = (double*)malloc((size_t)head->ndatapnts * sizeof(double));
+    line_start = (size_t*)malloc((size_t)head->ndatapnts * sizeof(size_t));
+    line_end = (size_t*)malloc((size_t)head->ndatapnts * sizeof(size_t));
+    if ((line_vc == NULL) || (line_S == NULL) || (line_scale == NULL) ||
+        (line_aL == NULL) || (line_start == NULL) || (line_end == NULL)) {
+      fprintf(stderr, "Failed to allocate per-line arrays for composition index %zu\n", comp);
+      goto comp_error;
+    }
 
-          size_t start_i = (idx > off1) ? (idx - off1) : 0;
-          size_t end_i = idx + off1;
-          if (end_i > mu_size) {
-            end_i = mu_size;
+    // Serial analysis phase: compute line strengths (incl. Fortran TIPS),
+    // widths, amplitude prefactor and grid windows for every line. This
+    // keeps the non-reentrant tips_2020() out of the parallel region.
+    for (int mm = 0; mm < head->ndatapnts; mm++) {
+      vc = gsl_vector_float_get(v0, mm);
+      // analytic nearest index on the uniform grid (replaces find_nearest_index)
+      double fidx = (vc - start_value) / mu_step;
+      long lidx = lround(fidx);
+      if (lidx < 0) {
+        lidx = 0;
+      } else if ((size_t)lidx >= mu_size) {
+        lidx = (long)mu_size - 1;
+      }
+      size_t idx = (size_t)lidx;
+
+      q296 = tips_2020(prms[mm].molec_num, prms[mm].isotp_num, 296);
+      qT = tips_2020(prms[mm].molec_num, prms[mm].isotp_num, T);
+
+      double a_D = (double)gsl_vector_float_get(alphaD, mm);
+      double a_L = (double)gsl_vector_float_get(alphaL, mm);
+
+      if (qT == 0.0) {
+        line_start[mm] = 0;
+        line_end[mm] = 0;
+        continue;
+      }
+      S = prms[mm].line_I * q296/qT * exp(c1_erg*prms[mm].low_state_en/T)/exp(c1_erg*prms[mm].low_state_en/296)*((1-exp(-c1_erg*vc/T))/(1-exp(-c1_erg*vc/296)));
+
+      if (a_D <= 0.0f || !isfinite(a_D) || !isfinite(a_L) || !isfinite(S)) {
+        line_start[mm] = 0;
+        line_end[mm] = 0;
+        continue;
+      }
+
+      size_t start_i = (idx > off1) ? (idx - off1) : 0;
+      size_t end_i = idx + off1;
+      if (end_i > mu_size) {
+        end_i = mu_size;
+      }
+
+      line_vc[mm] = vc;
+      // amplitude prefactor: keep identical left-to-right association as the
+      // original loop so the per-point value is bit-for-bit unchanged
+      line_S[mm] = sqrt_ln2*S/(sqrt_pi*a_D) * q * work->pathL/100 * P*101325/1e4 * invkb_si/T;
+      // profile scale sqrt_ln2/a_D hoisted out of the per-point inner loop
+      line_scale[mm] = sqrt_ln2/a_D;
+      line_aL[mm] = sqrt_ln2*a_L/a_D;
+      line_start[mm] = start_i;
+      line_end[mm] = end_i;
+    }
+
+    // Parallel line-profile phase: each thread accumulates its lines into a
+    // private slice of thread_buf; slices are merged after the region. The
+    // component loop itself stays serial (compute load is in the profile).
+    {
+      int nthreads = 1;
+#ifdef HALIR_HAVE_OPENMP
+      nthreads = omp_get_max_threads();
+      if (nthreads < 1) {
+        nthreads = 1;
+      }
+#endif
+      thread_buf = (double*)calloc((size_t)nthreads * mu_size, sizeof(double));
+      if (thread_buf == NULL) {
+        fprintf(stderr, "Failed to allocate thread buffers for composition index %zu\n", comp);
+        goto comp_error;
+      }
+
+#ifdef HALIR_HAVE_OPENMP
+      #pragma omp parallel
+      {
+        int tid = omp_get_thread_num();
+        double *buf = thread_buf + (size_t)tid * mu_size;
+        #pragma omp for schedule(static)
+        for (int mm = 0; mm < head->ndatapnts; mm++) {
+          double vc_m = line_vc[mm];
+          double amp = line_S[mm];
+          double scale = line_scale[mm];
+          double yterm = line_aL[mm];
+          for (size_t i = line_start[mm]; i < line_end[mm]; i++) {
+            float mu_i = (float)(start_value + (double)i*mu_step);
+            buf[i] += amp * re_w_of_z(scale*((double)mu_i-vc_m), yterm);
           }
-          for (size_t i = start_i; i < end_i; i++) {
-            // y->data[i] += S/a_D * q * NL * work->pathL * 298/T * voigt(sqrt_ln2*(mu->data[i]-vc)/a_D, 1/a_D, sqrt_ln2*a_L/a_D);
-            y->data[i] += sqrt_ln2*S/(sqrt_pi*a_D) * q * work->pathL/100 * P*101325/1e4 * invkb_si/T * re_w_of_z(sqrt_ln2*(mu->data[i]-vc)/a_D, sqrt_ln2*a_L/a_D);
-          }
+        }
+      }
+#else
+      for (int mm = 0; mm < head->ndatapnts; mm++) {
+        double vc_m = line_vc[mm];
+        double amp = line_S[mm];
+        double scale = line_scale[mm];
+        double yterm = line_aL[mm];
+        for (size_t i = line_start[mm]; i < line_end[mm]; i++) {
+          float mu_i = (float)(start_value + (double)i*mu_step);
+          thread_buf[i] += amp * re_w_of_z(scale*((double)mu_i-vc_m), yterm);
+        }
+      }
+#endif
+
+      // Merge per-thread slices into the output buffer
+      for (int t = 0; t < nthreads; t++) {
+        const double *buf = thread_buf + (size_t)t * mu_size;
+        for (size_t i = 0; i < mu_size; i++) {
+          y->data[i] += (float)buf[i];
+        }
+      }
     }
 
     result->spectra[comp].ndatapnts = mu_size;
@@ -1236,11 +1336,10 @@ halir_result *halir_calculate_result(halir_workspace *work)
     }
 
     for (size_t i = 0; i < mu_size; i++) {
-      result->spectra[comp].wavenum[i] = (halir_num)mu->data[i];
+      result->spectra[comp].wavenum[i] = (halir_num)(float)(start_value + (double)i*mu_step);
       result->spectra[comp].data[i] = (halir_num)y->data[i];
     }
 
-    gsl_vector_float_free(mu);
     gsl_vector_float_free(y);
     gsl_vector_float_free(v0);
     gsl_vector_float_free(p_S);
@@ -1249,11 +1348,17 @@ halir_result *halir_calculate_result(halir_workspace *work)
     gsl_vector_float_free(alphaD);
     gsl_vector_float_free(MM);
     gsl_vector_float_free(taB);
+    free(line_vc);
+    free(line_S);
+    free(line_scale);
+    free(line_aL);
+    free(line_start);
+    free(line_end);
+    free(thread_buf);
 
     continue;
 
 comp_error:
-    gsl_vector_float_free(mu);
     gsl_vector_float_free(y);
     gsl_vector_float_free(v0);
     gsl_vector_float_free(p_S);
@@ -1262,6 +1367,13 @@ comp_error:
     gsl_vector_float_free(alphaD);
     gsl_vector_float_free(MM);
     gsl_vector_float_free(taB);
+    free(line_vc);
+    free(line_S);
+    free(line_scale);
+    free(line_aL);
+    free(line_start);
+    free(line_end);
+    free(thread_buf);
     goto calc_error;
   }
 

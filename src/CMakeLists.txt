@@ -7,3 +7,8 @@ add_library(HalIR SHARED halir.c cJSON.c BD_TIPS_2021.FOR ${HEADER_LIST})
 
 target_include_directories(HalIR PUBLIC ../include)
 target_link_libraries(HalIR PUBLIC m gsl gslcblas cerf)
+
+if(OpenMP_C_FOUND)
+  target_link_libraries(HalIR PUBLIC OpenMP::OpenMP_C)
+  target_compile_definitions(HalIR PRIVATE HALIR_HAVE_OPENMP)
+endif()

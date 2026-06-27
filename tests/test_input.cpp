@@ -92,7 +92,7 @@ std::string build_input_json(const std::string &pname,
     "input": {
       "project": {
         "pname": "__PNAME__",
-        "rootDir": "/tmp/HalIR/tests/TestCalc/",
+        "rootDir": "TestCalc",
         "hapi_db": "",
         "pcomments": "CO Test on some different concentrations",
         "pfiles": [null]

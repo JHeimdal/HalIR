@@ -134,6 +134,7 @@ std::string build_input_json(const std::string &pname,
       !replace_once(json_text, "__PRESS__", press) ||
       !replace_once(json_text, "__PRESS_UNIT__", press_unit) ||
       !replace_once(json_text, "__ROI__", roi)) {
+    std::cerr << "Failed to populate JSON test fixture template" << std::endl;
     return {};
   }
 

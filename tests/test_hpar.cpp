@@ -37,7 +37,8 @@ bool write_truncated_prmfile(const std::filesystem::path &file_path)
 
   const char truncated_bytes[] = {0x01, 0x02, 0x03, 0x04};
   out.write(truncated_bytes, sizeof(truncated_bytes));
-  return out.good();
+  out.close();
+  return !out.fail();
 }
 
 bool write_header_only_prmfile(const std::filesystem::path &file_path)
@@ -51,7 +52,8 @@ bool write_header_only_prmfile(const std::filesystem::path &file_path)
   head.nisotp = 1;
   head.ndatapnts = 1;
   out.write(reinterpret_cast<const char*>(&head), sizeof(head));
-  return out.good();
+  out.close();
+  return !out.fail();
 }
 
 bool write_missing_line_data_prmfile(const std::filesystem::path &file_path)
@@ -67,7 +69,8 @@ bool write_missing_line_data_prmfile(const std::filesystem::path &file_path)
   head.ndatapnts = 1;
   out.write(reinterpret_cast<const char*>(&head), sizeof(head));
   out.write(reinterpret_cast<const char*>(&molecule_id), sizeof(molecule_id));
-  return out.good();
+  out.close();
+  return !out.fail();
 }
 
 bool write_valid_prmfile(const std::filesystem::path &file_path)
@@ -89,7 +92,8 @@ bool write_valid_prmfile(const std::filesystem::path &file_path)
   out.write(reinterpret_cast<const char*>(&head), sizeof(head));
   out.write(reinterpret_cast<const char*>(&molecule_id), sizeof(molecule_id));
   out.write(reinterpret_cast<const char*>(&line), sizeof(line));
-  return out.good();
+  out.close();
+  return !out.fail();
 }
 
 } // namespace

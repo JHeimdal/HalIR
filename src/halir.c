@@ -341,6 +341,113 @@ void halir_workspace_free(halir_workspace *work)
   free(work);
 }
 
+halir_spectra *
+halir_spectra_create(size_t ndatapnts)
+{
+  halir_spectra *spectra;
+
+  if (ndatapnts == 0) {
+    return NULL;
+  }
+
+  spectra = (halir_spectra*)calloc(1, sizeof(halir_spectra));
+  if (spectra == NULL) {
+    return NULL;
+  }
+
+  spectra->wavenum = (halir_num*)calloc(ndatapnts, sizeof(halir_num));
+  spectra->data = (halir_num*)calloc(ndatapnts, sizeof(halir_num));
+  if ((spectra->wavenum == NULL) || (spectra->data == NULL)) {
+    free(spectra->wavenum);
+    free(spectra->data);
+    free(spectra);
+    return NULL;
+  }
+
+  spectra->ndatapnts = ndatapnts;
+  return spectra;
+}
+
+void
+halir_spectra_free(halir_spectra *spectra)
+{
+  if (spectra == NULL) {
+    return;
+  }
+
+  free(spectra->wavenum);
+  free(spectra->data);
+  free(spectra->composition.hitran_head.molecs);
+  free(spectra->composition.hitran_prms);
+  free(spectra);
+}
+
+halir_result *
+halir_result_create(halir_workspace *workspace, size_t nspectra)
+{
+  halir_result *result;
+
+  if ((workspace == NULL) || (nspectra == 0)) {
+    return NULL;
+  }
+
+  result = (halir_result*)calloc(1, sizeof(halir_result));
+  if (result == NULL) {
+    return NULL;
+  }
+
+  result->spectra = (halir_spectra*)calloc(nspectra, sizeof(halir_spectra));
+  if (result->spectra == NULL) {
+    free(result);
+    return NULL;
+  }
+
+  result->workspace = workspace;
+  result->nspectra = nspectra;
+  return result;
+}
+
+void
+halir_result_free(halir_result *result)
+{
+  size_t i;
+
+  if (result == NULL) {
+    return;
+  }
+
+  if (result->spectra != NULL) {
+    for (i = 0; i < result->nspectra; i++) {
+      free(result->spectra[i].wavenum);
+      free(result->spectra[i].data);
+      free(result->spectra[i].composition.hitran_head.molecs);
+      free(result->spectra[i].composition.hitran_prms);
+    }
+    free(result->spectra);
+  }
+
+  free(result);
+}
+
+static void
+copy_compound_metadata(const halir_compound *src, halir_compound *dst)
+{
+  if ((src == NULL) || (dst == NULL)) {
+    return;
+  }
+
+  memset(dst, 0, sizeof(*dst));
+  memcpy(dst->molec, src->molec, sizeof(dst->molec));
+  memcpy(dst->isotop, src->isotop, sizeof(dst->isotop));
+  dst->vmr = src->vmr;
+  dst->conc = src->conc;
+  dst->concU = src->concU;
+  memcpy(dst->prmfile, src->prmfile, sizeof(dst->prmfile));
+  dst->hitran_head = src->hitran_head;
+  dst->hitran_head.molecs = NULL;
+  dst->hitran_prms = NULL;
+}
+
 int
 halir_workspace_validate(halir_workspace *work)
 {
@@ -947,14 +1054,15 @@ size_t find_nearest_index(gsl_vector_float *v, float val)
   return idx;
 }
 
-int halir_test_calc(halir_workspace *work)
+halir_result *halir_calculate_result(halir_workspace *work)
 {
   double q296, qT;
-  double T = work->temp;
-  double P = work->press;
+  double T;
+  double P;
   double vc, S, q, tfac, mu_step, mu_off1;
   double sig_v = 0.1;
   float alphaD_max, alphaD_min, alphaL_max,  alphaL_min;
+  halir_result *result = NULL;
 
   const double kb_si = 1.3806503e-23; // J/K
   const double kb_erg = 1.3806503e-16; // erg/K
@@ -971,36 +1079,63 @@ int halir_test_calc(halir_workspace *work)
 
   if ((work == NULL) || (work->composition == NULL) || (work->composition_length == 0)) {
     fprintf(stderr, "Invalid workspace for calculation\n");
-    return 1;
+    return NULL;
   }
-  if ((!isfinite(T)) || (!isfinite(P)) || (T <= 0.0)) {
+
+  T = work->temp;
+  P = work->press;
+
+  if ((!isfinite(T)) || (!isfinite(P)) || (T <= 0.0) || (P <= 0.0)) {
     fprintf(stderr, "Invalid temperature or pressure in workspace\n");
-    return 1;
+    return NULL;
   }
   if ((!isfinite(work->ROI[0])) || (!isfinite(work->ROI[1])) || (work->ROI[1] <= work->ROI[0])) {
     fprintf(stderr, "Invalid ROI range in workspace\n");
-    return 1;
+    return NULL;
+  }
+
+  result = halir_result_create(work, work->composition_length);
+  if (result == NULL) {
+    fprintf(stderr, "Could not allocate result container\n");
+    return NULL;
   }
 
   for (size_t comp = 0; comp < work->composition_length; comp++) {
     halir_HitranHead *head = &work->composition[comp]->hitran_head;
     halir_HitranLine *prms = work->composition[comp]->hitran_prms;
+    gsl_vector_float *v0 = NULL;
+    gsl_vector_float *p_S = NULL;
+    gsl_vector_float *a_B = NULL;
+    gsl_vector_float *MM = NULL;
+    gsl_vector_float *taB = NULL;
+    gsl_vector_float *alphaD = NULL;
+    gsl_vector_float *alphaL = NULL;
+    gsl_vector_float *mu = NULL;
+    gsl_vector_float *y = NULL;
+    size_t mu_size = 0;
+
     if ((prms == NULL) || (head->ndatapnts <= 0)) {
       fprintf(stderr, "Missing spectral parameters for composition index %zu\n", comp);
-      return 1;
+      goto calc_error;
     }
+
+    copy_compound_metadata(work->composition[comp], &result->spectra[comp].composition);
+
     q = work->composition[comp]->vmr;
     tfac = sqrtf(2*ln2*kb_si*T);
     // Allocate vectors used in the calculations
-    gsl_vector_float *v0 = gsl_vector_float_alloc(head->ndatapnts);
-    /*gsl_vector_float *t_mu = gsl_vector_float_alloc(head->ndatapnts);*/
-    gsl_vector_float *p_S  = gsl_vector_float_alloc(head->ndatapnts);
-    gsl_vector_float *a_B  = gsl_vector_float_alloc(head->ndatapnts);
-    /*gsl_vector_float *s_B  = gsl_vector_float_alloc(head->ndatapnts);*/
-    gsl_vector_float *MM   = gsl_vector_float_alloc(head->ndatapnts);
-    gsl_vector_float *taB  = gsl_vector_float_alloc(head->ndatapnts);
-    gsl_vector_float *alphaD  = gsl_vector_float_alloc(head->ndatapnts);
-    gsl_vector_float *alphaL  = gsl_vector_float_alloc(head->ndatapnts);
+    v0 = gsl_vector_float_alloc(head->ndatapnts);
+    p_S = gsl_vector_float_alloc(head->ndatapnts);
+    a_B = gsl_vector_float_alloc(head->ndatapnts);
+    MM = gsl_vector_float_alloc(head->ndatapnts);
+    taB = gsl_vector_float_alloc(head->ndatapnts);
+    alphaD = gsl_vector_float_alloc(head->ndatapnts);
+    alphaL = gsl_vector_float_alloc(head->ndatapnts);
+    if ((v0 == NULL) || (p_S == NULL) || (a_B == NULL) || (MM == NULL) ||
+        (taB == NULL) || (alphaD == NULL) || (alphaL == NULL)) {
+      fprintf(stderr, "Failed to allocate temporary vectors for composition index %zu\n", comp);
+      goto comp_error;
+    }
 
     // Populate the vectors with numbers
     for (int i=0; i < head->ndatapnts; i++) {
@@ -1029,46 +1164,29 @@ int halir_test_calc(halir_workspace *work)
     mu_step = sig_v * (alphaD_min + alphaL_min);
     if ((!isfinite(mu_step)) || (mu_step <= 0.0)) {
       fprintf(stderr, "Invalid line widths produced non-positive sampling step\n");
-      gsl_vector_float_free(v0);
-      gsl_vector_float_free(p_S);
-      gsl_vector_float_free(a_B);
-      gsl_vector_float_free(alphaL);
-      gsl_vector_float_free(alphaD);
-      gsl_vector_float_free(MM);
-      gsl_vector_float_free(taB);
-      return 1;
+      goto comp_error;
     }
     mu_off1 = ceilf(50*GSL_MAX(alphaD_max, alphaL_max));
     if ((!isfinite(mu_off1)) || (mu_off1 < 0.0)) {
       fprintf(stderr, "Invalid line widths produced invalid sampling offset\n");
-      gsl_vector_float_free(v0);
-      gsl_vector_float_free(p_S);
-      gsl_vector_float_free(a_B);
-      gsl_vector_float_free(alphaL);
-      gsl_vector_float_free(alphaD);
-      gsl_vector_float_free(MM);
-      gsl_vector_float_free(taB);
-      return 1;
+      goto comp_error;
     }
 
     /*printf("mu_step: %f mu_off1: %f\n", mu_step, mu_off1);*/
-    size_t mu_size = (size_t)ceilf(((work->ROI[1]-work->ROI[0])+2*mu_off1)/mu_step);
+    mu_size = (size_t)ceilf(((work->ROI[1]-work->ROI[0])+2*mu_off1)/mu_step);
     if (mu_size < 2) {
       mu_size = 2;
     }
     mu_step = ((work->ROI[1]-work->ROI[0])+2*mu_off1)/(mu_size-1);
     if ((!isfinite(mu_step)) || (mu_step <= 0.0)) {
       fprintf(stderr, "Invalid final sampling step\n");
-      gsl_vector_float_free(v0);
-      gsl_vector_float_free(p_S);
-      gsl_vector_float_free(a_B);
-      gsl_vector_float_free(alphaL);
-      gsl_vector_float_free(alphaD);
-      gsl_vector_float_free(MM);
-      gsl_vector_float_free(taB);
-      return 1;
+      goto comp_error;
     }
-    gsl_vector_float *mu = gsl_vector_float_alloc(mu_size);
+    mu = gsl_vector_float_alloc(mu_size);
+    if (mu == NULL) {
+      fprintf(stderr, "Failed to allocate mu grid for composition index %zu\n", comp);
+      goto comp_error;
+    }
     float start_value = work->ROI[0]-mu_off1;
     for (size_t i=0; i < mu_size; i++) {
       gsl_vector_float_set(mu, i, start_value+i*mu_step);
@@ -1077,7 +1195,11 @@ int halir_test_calc(halir_workspace *work)
     /*printf("mu_step: %f mu_size: %ld\n", mu_step, mu_size);*/
     /*printf("mu[0]: %f mu[-1]: %f\n", gsl_vector_float_get(mu, 0), gsl_vector_float_get(mu, mu_size-1));*/
 
-    gsl_vector_float *y = gsl_vector_float_calloc(mu_size);
+    y = gsl_vector_float_calloc(mu_size);
+    if (y == NULL) {
+      fprintf(stderr, "Failed to allocate output buffer for composition index %zu\n", comp);
+      goto comp_error;
+    }
     // Print some information (possible in later callback?)
     /*printf("alphaL_min: %f alphaL_max %f\n", alphaL_min, alphaL_max);*/
     /*printf("alphaD_min: %f alphaD_max %f\n", alphaD_min, alphaD_max);*/
@@ -1104,9 +1226,20 @@ int halir_test_calc(halir_workspace *work)
             y->data[i] += sqrt_ln2*S/(sqrt_pi*a_D) * q * work->pathL/100 * P*101325/1e4 * invkb_si/T * re_w_of_z(sqrt_ln2*(mu->data[i]-vc)/a_D, sqrt_ln2*a_L/a_D);
           }
     }
-    for (size_t i = 0; i < mu_size; i++) {
-      printf("%f %f\n", mu->data[i], y->data[i]);
+
+    result->spectra[comp].ndatapnts = mu_size;
+    result->spectra[comp].wavenum = (halir_num*)calloc(mu_size, sizeof(halir_num));
+    result->spectra[comp].data = (halir_num*)calloc(mu_size, sizeof(halir_num));
+    if ((result->spectra[comp].wavenum == NULL) || (result->spectra[comp].data == NULL)) {
+      fprintf(stderr, "Failed to allocate result arrays for composition index %zu\n", comp);
+      goto comp_error;
     }
+
+    for (size_t i = 0; i < mu_size; i++) {
+      result->spectra[comp].wavenum[i] = (halir_num)mu->data[i];
+      result->spectra[comp].data[i] = (halir_num)y->data[i];
+    }
+
     gsl_vector_float_free(mu);
     gsl_vector_float_free(y);
     gsl_vector_float_free(v0);
@@ -1116,6 +1249,44 @@ int halir_test_calc(halir_workspace *work)
     gsl_vector_float_free(alphaD);
     gsl_vector_float_free(MM);
     gsl_vector_float_free(taB);
+
+    continue;
+
+comp_error:
+    gsl_vector_float_free(mu);
+    gsl_vector_float_free(y);
+    gsl_vector_float_free(v0);
+    gsl_vector_float_free(p_S);
+    gsl_vector_float_free(a_B);
+    gsl_vector_float_free(alphaL);
+    gsl_vector_float_free(alphaD);
+    gsl_vector_float_free(MM);
+    gsl_vector_float_free(taB);
+    goto calc_error;
   }
+
+  return result;
+
+calc_error:
+  halir_result_free(result);
+  return NULL;
+}
+
+int halir_test_calc(halir_workspace *work)
+{
+  halir_result *result;
+
+  result = halir_calculate_result(work);
+  if (result == NULL) {
+    return 1;
+  }
+
+  for (size_t comp = 0; comp < result->nspectra; comp++) {
+    for (size_t i = 0; i < result->spectra[comp].ndatapnts; i++) {
+      printf("%f %f\n", result->spectra[comp].wavenum[i], result->spectra[comp].data[i]);
+    }
+  }
+
+  halir_result_free(result);
   return 0;
 }

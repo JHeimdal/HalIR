@@ -1,12 +1,16 @@
 
 add_executable(test_input test_input.cpp)
 add_executable(test_hpar test_hpar.cpp)
+add_executable(test_calc test_calc.cpp)
 
 target_compile_features(test_input PRIVATE cxx_std_17)
 target_compile_features(test_hpar PRIVATE cxx_std_17)
+target_compile_features(test_calc PRIVATE cxx_std_17)
+target_compile_definitions(test_calc PRIVATE HALIR_TESTS_SOURCE_DIR="${CMAKE_CURRENT_SOURCE_DIR}")
 
 target_link_libraries(test_input PRIVATE HalIR)
 target_link_libraries(test_hpar PRIVATE HalIR)
+target_link_libraries(test_calc PRIVATE HalIR)
 
 enable_testing()
 add_test(NAME test_exec COMMAND $<TARGET_FILE:halir>)
@@ -34,10 +38,14 @@ add_test(NAME input_composition_set_concentration_api COMMAND $<TARGET_FILE:test
 add_test(NAME input_composition_api_invalid_args COMMAND $<TARGET_FILE:test_input> 20)
 add_test(NAME input_workspace_validation_success COMMAND $<TARGET_FILE:test_input> 21)
 add_test(NAME input_workspace_validation_invalid_args COMMAND $<TARGET_FILE:test_input> 22)
+add_test(NAME input_result_create_free_api COMMAND $<TARGET_FILE:test_input> 23)
+add_test(NAME input_result_api_invalid_args COMMAND $<TARGET_FILE:test_input> 24)
 
 add_test(NAME hpar_valid_file_test COMMAND $<TARGET_FILE:test_hpar> 0)
 add_test(NAME hpar_missing_file_test COMMAND $<TARGET_FILE:test_hpar> 1)
 add_test(NAME hpar_truncated_file_test COMMAND $<TARGET_FILE:test_hpar> 2)
 add_test(NAME hpar_header_only_file_test COMMAND $<TARGET_FILE:test_hpar> 3)
 add_test(NAME hpar_missing_line_data_file_test COMMAND $<TARGET_FILE:test_hpar> 4)
+
+add_test(NAME calc_result_regression_test COMMAND $<TARGET_FILE:test_calc>)
 

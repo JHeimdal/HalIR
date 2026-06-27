@@ -276,12 +276,37 @@ typedef struct
 
 /**
  * @brief Result container for a simulated spectrum.
+ *
+ * Ownership model:
+ * - `wavenum` and `data` are owned by this struct instance.
+ * - `composition` stores metadata copied from the workspace entry.
+ * - Nested source buffers (`composition.hitran_prms`,
+ *   `composition.hitran_head.molecs`) are not deep-copied from the source
+ *   workspace by calculation APIs.
  */
 typedef struct{
   size_t ndatapnts;          /**< Number of spectral samples. */
-  halir_compound *composition; /**< Composition metadata used for the result. */
+  halir_compound composition; /**< Composition metadata used for the result. */
   halir_num *data;           /**< Spectral values array. */
-} hair_spectra;
+  halir_num *wavenum;        /**< Wavenumber values array. */
+} halir_spectra;
+
+/* Backward-compatible alias for historical typo. */
+typedef halir_spectra hair_spectra;
+
+/**
+ * @brief Result container for a complete HalIR simulation run.
+ *
+ * Ownership model:
+ * - `spectra` array is owned by this struct instance.
+ * - Each spectra entry owns its `wavenum` and `data` buffers.
+ * - `workspace` is a non-owning pointer for provenance only.
+ */
+typedef struct{
+  halir_workspace *workspace; /**< Pointer to the workspace used for the calculation. */
+  size_t nspectra;           /**< Number of spectra in the result. */
+  halir_spectra *spectra;    /**< Dynamic array of spectra. */
+} halir_result;
 
 /**
  * @defgroup halir_api HALIR Public API
@@ -498,6 +523,68 @@ size_t find_nearest_index(gsl_vector_float *v, float val);
  * @return 1 on invalid workspace state or runtime setup failure.
  */
 int halir_test_calc(halir_workspace *work);
+
+/**
+ * @brief Allocate a standalone spectra container with data buffers.
+ * @ingroup halir_api_lifecycle
+ *
+ * The returned object owns `data` and `wavenum` buffers and must be released
+ * with halir_spectra_free().
+ *
+ * @param ndatapnts Number of data samples to allocate.
+ * @return Pointer to a new spectra object, or NULL on failure.
+ */
+halir_spectra *halir_spectra_create(size_t ndatapnts);
+
+/**
+ * @brief Free a spectra object and its owned sample buffers.
+ * @ingroup halir_api_lifecycle
+ *
+ * This function is NULL-safe.
+ *
+ * @param spectra Spectra object to release.
+ */
+void halir_spectra_free(halir_spectra *spectra);
+
+/**
+ * @brief Allocate a result container with space for `nspectra` entries.
+ * @ingroup halir_api_lifecycle
+ *
+ * The returned object owns the spectra array and must be released with
+ * halir_result_free(). The `workspace` pointer is stored as non-owning
+ * metadata and is never freed by halir_result_free().
+ *
+ * @param workspace Workspace pointer associated with this result.
+ * @param nspectra Number of spectra entries to allocate.
+ * @return Pointer to a new result object, or NULL on failure.
+ */
+halir_result *halir_result_create(halir_workspace *workspace, size_t nspectra);
+
+/**
+ * @brief Free a result object and all owned spectra buffers.
+ * @ingroup halir_api_lifecycle
+ *
+ * This function is NULL-safe.
+ *
+ * @param result Result object to release.
+ */
+void halir_result_free(halir_result *result);
+
+/**
+ * @brief Execute HALIR calculation and return per-composition spectra.
+ * @ingroup halir_api_io
+ *
+ * Returns one spectrum per composition. The caller owns the returned result and
+ * must release it with halir_result_free().
+ *
+ * The result contains deep-copied composition scalar/string metadata and
+ * freshly allocated `wavenum`/`data` buffers. It does not deep-copy large
+ * source prmfile arrays from workspace composition entries.
+ *
+ * @param work Validated workspace.
+ * @return Pointer to result object on success, or NULL on failure.
+ */
+halir_result *halir_calculate_result(halir_workspace *work);
 
 // input str is made lower case and compared halir_Units
 halir_Units halir_Unit_from_str(char *str) {

@@ -167,6 +167,8 @@ int main(int argc, char **argv)
     COMPOSITION_API_INVALID_ARGS,
     WORKSPACE_VALIDATION_SUCCESS,
     WORKSPACE_VALIDATION_INVALID_ARGS,
+    RESULT_CREATE_FREE_API,
+    RESULT_API_INVALID_ARGS,
   };
 
   using namespace std;
@@ -632,6 +634,62 @@ int main(int argc, char **argv)
       return 1;
     }
 
+    halir_workspace_free(work);
+    return 0;
+  }
+
+  if (test == RESULT_CREATE_FREE_API) {
+    halir_workspace *work = halir_workspace_create();
+    halir_spectra *spectra = halir_spectra_create(16);
+    halir_result *result;
+
+    if (work == nullptr || spectra == nullptr) {
+      std::cout << "result lifecycle allocation failed" << std::endl;
+      halir_spectra_free(spectra);
+      halir_workspace_free(work);
+      return 1;
+    }
+
+    if (spectra->ndatapnts != 16 || spectra->wavenum == nullptr || spectra->data == nullptr) {
+      std::cout << "halir_spectra_create did not initialize buffers" << std::endl;
+      halir_spectra_free(spectra);
+      halir_workspace_free(work);
+      return 1;
+    }
+
+    result = halir_result_create(work, 2);
+    if (result == nullptr || result->workspace != work || result->nspectra != 2 || result->spectra == nullptr) {
+      std::cout << "halir_result_create did not initialize container" << std::endl;
+      halir_spectra_free(spectra);
+      halir_result_free(result);
+      halir_workspace_free(work);
+      return 1;
+    }
+
+    halir_spectra_free(spectra);
+    halir_result_free(result);
+    halir_workspace_free(work);
+    return 0;
+  }
+
+  if (test == RESULT_API_INVALID_ARGS) {
+    halir_workspace *work = halir_workspace_create();
+
+    if (work == nullptr) {
+      std::cout << "halir_workspace_create returned NULL" << std::endl;
+      return 1;
+    }
+
+    if (halir_spectra_create(0) != nullptr ||
+        halir_result_create(nullptr, 1) != nullptr ||
+        halir_result_create(work, 0) != nullptr) {
+      std::cout << "result API invalid-argument checks failed" << std::endl;
+      halir_workspace_free(work);
+      return 1;
+    }
+
+    halir_spectra_free(nullptr);
+    halir_result_free(nullptr);
     halir_workspace_free(work);
     return 0;
   }

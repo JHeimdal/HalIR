@@ -37,14 +37,14 @@ static int copy_string_checked(char *dst, size_t dst_size, const char *src, cons
   return 1;
 }
 
-halir_workspace*
-halir_workspace_create(void)
+halir_simulation_setup*
+halir_simulation_setup_create(void)
 {
-  return (halir_workspace*)calloc(1, sizeof(halir_workspace));
+  return (halir_simulation_setup*)calloc(1, sizeof(halir_simulation_setup));
 }
 
 int
-halir_workspace_set_project(halir_workspace *work, const char *pname, const char *rootDir, const char *pcomments)
+halir_simulation_setup_set_project(halir_simulation_setup *work, const char *pname, const char *rootDir, const char *pcomments)
 {
   if ((work == NULL) || (pname == NULL) || (rootDir == NULL) || (pcomments == NULL)) {
     return 1;
@@ -64,7 +64,7 @@ halir_workspace_set_project(halir_workspace *work, const char *pname, const char
 }
 
 int
-halir_workspace_add_project_file(halir_workspace *work, const char *path)
+halir_simulation_setup_add_project_file(halir_simulation_setup *work, const char *path)
 {
   char **new_pfiles;
   size_t new_len;
@@ -93,7 +93,7 @@ halir_workspace_add_project_file(halir_workspace *work, const char *path)
 }
 
 int
-halir_workspace_set_sample_env(halir_workspace *work,
+halir_simulation_setup_set_sample_env(halir_simulation_setup *work,
                                double temp, halir_Units tempU,
                                double press, halir_Units pressU,
                                double pathL, halir_Units pathLU,
@@ -153,7 +153,7 @@ halir_workspace_set_sample_env(halir_workspace *work,
 }
 
 int
-halir_workspace_add_composition(halir_workspace *work, const char *molec, const char *isotop, size_t *out_index)
+halir_simulation_setup_add_composition(halir_simulation_setup *work, const char *molec, const char *isotop, size_t *out_index)
 {
   halir_compound **new_composition;
   halir_compound *new_comp;
@@ -192,7 +192,7 @@ halir_workspace_add_composition(halir_workspace *work, const char *molec, const 
 }
 
 int
-halir_compound_set_vmr(halir_workspace *work, size_t comp_index, double vmr)
+halir_compound_set_vmr(halir_simulation_setup *work, size_t comp_index, double vmr)
 {
   if ((work == NULL) || (comp_index >= work->composition_length)) {
     return 1;
@@ -206,7 +206,7 @@ halir_compound_set_vmr(halir_workspace *work, size_t comp_index, double vmr)
 }
 
 int
-halir_compound_set_concentration(halir_workspace *work, size_t comp_index, double conc, halir_Units concU)
+halir_compound_set_concentration(halir_simulation_setup *work, size_t comp_index, double conc, halir_Units concU)
 {
   int read_err = 0;
   double normalized_conc;
@@ -299,7 +299,7 @@ load_prmfile(halir_compound *current_comp)
 }
 
 int
-halir_compound_load_prmfile(halir_workspace *work, size_t comp_index, const char *prmfile_path)
+halir_compound_load_prmfile(halir_simulation_setup *work, size_t comp_index, const char *prmfile_path)
 {
   if ((work == NULL) || (prmfile_path == NULL) || (comp_index >= work->composition_length)) {
     return 1;
@@ -316,7 +316,7 @@ halir_compound_load_prmfile(halir_workspace *work, size_t comp_index, const char
   return 0;
 }
 
-void halir_workspace_free(halir_workspace *work)
+void halir_simulation_setup_free(halir_simulation_setup *work)
 {
   if (work == NULL) {
     return;
@@ -387,7 +387,7 @@ halir_spectra_free(halir_spectra *spectra)
 }
 
 halir_result *
-halir_result_create(halir_workspace *workspace, size_t nspectra)
+halir_result_create(halir_simulation_setup *workspace, size_t nspectra)
 {
   halir_result *result;
 
@@ -455,7 +455,7 @@ copy_compound_metadata(const halir_compound *src, halir_compound *dst)
 }
 
 int
-halir_workspace_validate(halir_workspace *work)
+halir_simulation_setup_validate(halir_simulation_setup *work)
 {
   if (work == NULL) {
     return 1;
@@ -506,7 +506,7 @@ halir_workspace_validate(halir_workspace *work)
   return 0;
 }
 
-halir_workspace*
+halir_simulation_setup*
 halir_parseJSONinput(const char* const inputFile)
 {
   // Read the text file
@@ -564,7 +564,7 @@ halir_parseJSONinput(const char* const inputFile)
     infile = inputFile;
   }
 
-  halir_workspace *ret_workspace = (halir_workspace*)calloc(1, sizeof(halir_workspace));
+  halir_simulation_setup *ret_workspace = (halir_simulation_setup*)calloc(1, sizeof(halir_simulation_setup));
   if (ret_workspace == NULL) {
     fprintf(stderr, "Memory allocation failed for workspace\n");
     read_err = 1;
@@ -1042,7 +1042,7 @@ end:
   }
   if (read_err) {
     fprintf(stderr, "Something went wrong while reading input\n");
-    halir_workspace_free(ret_workspace);
+    halir_simulation_setup_free(ret_workspace);
     return NULL;
   } else {
     return ret_workspace;
@@ -1060,7 +1060,7 @@ size_t find_nearest_index(gsl_vector_float *v, float val)
   return idx;
 }
 
-halir_result *halir_calculate_result(halir_workspace *work)
+halir_result *halir_calculate_result(halir_simulation_setup *work)
 {
   double q296, qT;
   double T;
@@ -1384,7 +1384,7 @@ calc_error:
   return NULL;
 }
 
-int halir_test_calc(halir_workspace *work)
+int halir_test_calc(halir_simulation_setup *work)
 {
   halir_result *result;
 

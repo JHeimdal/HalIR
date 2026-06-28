@@ -17,14 +17,14 @@ int main(int argc, char **argv)
   }
   // char inputFile[] = "input.json";
 
-  halir_workspace *work = halir_parseJSONinput(inputFile);
+  halir_simulation_setup *work = halir_parseJSONinput(inputFile);
   if (work == NULL)
     return 99;
-  halir_print_workspace(work);
+  halir_print_simulation_setup(work);
 
   result = halir_calculate_result(work);
   if (result == NULL) {
-    halir_workspace_free(work);
+    halir_simulation_setup_free(work);
     return 1;
   }
 
@@ -35,6 +35,6 @@ int main(int argc, char **argv)
   }
 
   halir_result_free(result);
-  halir_workspace_free(work);
+  halir_simulation_setup_free(work);
   return 0;
 }

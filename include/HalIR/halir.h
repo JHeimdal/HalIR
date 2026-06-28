@@ -66,7 +66,7 @@ typedef enum
 } halir_Units;
 
 // Convert halir_Units to atm, cm, Kelvin
-double halir_Units_factors[] = {
+static double halir_Units_factors[] = {
   0.0, //None
   1.0, //ATM,
   9.86923266716013e-4, //MBAR,
@@ -87,7 +87,7 @@ double halir_Units_factors[] = {
   1.0, //CM,
 };
 
-const char *halir_Units_to_str[] = {
+static const char *halir_Units_to_str[] = {
   "NONE",
   "atm",
   "mbar",
@@ -110,13 +110,13 @@ const char *halir_Units_to_str[] = {
 
 #define HALIR_H_NUM_UNITS 18
 
-double CtoK(const double *temp) {
+static inline double CtoK(const double *temp) {
   return *temp + 273.15;
 }
-double FtoK(const double *temp) {
+static inline double FtoK(const double *temp) {
   return (*temp + 459.67) * 5./9.;
 }
-double halir_Units_to_Hitran(const halir_Units *unit, const double *value, int *read_err) {
+static inline double halir_Units_to_Hitran(const halir_Units *unit, const double *value, int *read_err) {
   switch (*unit) {
     case ATM:
       *read_err = 0;
@@ -272,7 +272,7 @@ typedef struct
 
   size_t composition_length;      /**< Number of composition entries. */
   halir_compound **composition;   /**< Dynamic array of composition pointers. */
-} halir_workspace;
+} halir_simulation_setup;
 
 /**
  * @brief Result container for a simulated spectrum.
@@ -303,7 +303,7 @@ typedef halir_spectra hair_spectra;
  * - `workspace` is a non-owning pointer for provenance only.
  */
 typedef struct{
-  halir_workspace *workspace; /**< Pointer to the workspace used for the calculation. */
+  halir_simulation_setup *workspace; /**< Pointer to the workspace used for the calculation. */
   size_t nspectra;           /**< Number of spectra in the result. */
   halir_spectra *spectra;    /**< Dynamic array of spectra. */
 } halir_result;
@@ -353,17 +353,17 @@ typedef struct{
  * @param inputFile Path to a JSON file or a JSON string buffer.
  * @return Pointer to a populated workspace on success, or NULL on failure.
  */
-halir_workspace* halir_parseJSONinput(const char* const inputFile);
+halir_simulation_setup* halir_parseJSONinput(const char* const inputFile);
 
 /**
  * @brief Allocate a zero-initialized HALIR workspace.
  * @ingroup halir_api_lifecycle
  *
- * The returned workspace must be released with halir_workspace_free().
+ * The returned workspace must be released with halir_simulation_setup_free().
  *
  * @return Pointer to a new workspace, or NULL if allocation fails.
  */
-halir_workspace* halir_workspace_create(void);
+halir_simulation_setup* halir_simulation_setup_create(void);
 
 /**
  * @brief Free a workspace and all nested dynamic allocations.
@@ -373,7 +373,7 @@ halir_workspace* halir_workspace_create(void);
  *
  * @param work Workspace to release.
  */
-void halir_workspace_free(halir_workspace *work);
+void halir_simulation_setup_free(halir_simulation_setup *work);
 
 /**
  * @brief Set project metadata fields in a workspace.
@@ -387,7 +387,7 @@ void halir_workspace_free(halir_workspace *work);
  * @return 1 when any argument is NULL.
  * @return 2 when bounded string copy fails.
  */
-int halir_workspace_set_project(halir_workspace *work, const char *pname, const char *rootDir, const char *pcomments);
+int halir_simulation_setup_set_project(halir_simulation_setup *work, const char *pname, const char *rootDir, const char *pcomments);
 
 /**
  * @brief Append a project file path to the workspace file list.
@@ -399,7 +399,7 @@ int halir_workspace_set_project(halir_workspace *work, const char *pname, const 
  * @return 1 when arguments are invalid.
  * @return 2 when memory allocation fails.
  */
-int halir_workspace_add_project_file(halir_workspace *work, const char *path);
+int halir_simulation_setup_add_project_file(halir_simulation_setup *work, const char *path);
 
 /**
  * @brief Set and normalize sample-environment parameters.
@@ -426,7 +426,7 @@ int halir_workspace_add_project_file(halir_workspace *work, const char *path);
  * @return 1 when input arguments fail validation.
  * @return 2 when conversion or string assignment fails.
  */
-int halir_workspace_set_sample_env(halir_workspace *work,
+int halir_simulation_setup_set_sample_env(halir_simulation_setup *work,
                                    double temp, halir_Units tempU,
                                    double press, halir_Units pressU,
                                    double pathL, halir_Units pathLU,
@@ -448,7 +448,7 @@ int halir_workspace_set_sample_env(halir_workspace *work,
  * @return 1 when arguments are invalid.
  * @return 2 when memory allocation or copy fails.
  */
-int halir_workspace_add_composition(halir_workspace *work, const char *molec, const char *isotop, size_t *out_index);
+int halir_simulation_setup_add_composition(halir_simulation_setup *work, const char *molec, const char *isotop, size_t *out_index);
 
 /**
  * @brief Set volume mixing ratio for an existing composition entry.
@@ -460,7 +460,7 @@ int halir_workspace_add_composition(halir_workspace *work, const char *molec, co
  * @return 0 on success.
  * @return 1 when workspace/index/vmr validation fails.
  */
-int halir_compound_set_vmr(halir_workspace *work, size_t comp_index, double vmr);
+int halir_compound_set_vmr(halir_simulation_setup *work, size_t comp_index, double vmr);
 
 /**
  * @brief Set concentration for an existing composition entry.
@@ -476,7 +476,7 @@ int halir_compound_set_vmr(halir_workspace *work, size_t comp_index, double vmr)
  * @return 1 when workspace/index/value validation fails.
  * @return 2 when unit conversion fails.
  */
-int halir_compound_set_concentration(halir_workspace *work, size_t comp_index, double conc, halir_Units concU);
+int halir_compound_set_concentration(halir_simulation_setup *work, size_t comp_index, double conc, halir_Units concU);
 
 /**
  * @brief Load HITRAN prmfile data for a composition entry.
@@ -489,7 +489,7 @@ int halir_compound_set_concentration(halir_workspace *work, size_t comp_index, d
  * @return 1 when arguments are invalid.
  * @return 2 when file access/read/format loading fails.
  */
-int halir_compound_load_prmfile(halir_workspace *work, size_t comp_index, const char *prmfile_path);
+int halir_compound_load_prmfile(halir_simulation_setup *work, size_t comp_index, const char *prmfile_path);
 
 /**
  * @brief Validate that a workspace is complete and numerically consistent.
@@ -502,7 +502,7 @@ int halir_compound_load_prmfile(halir_workspace *work, size_t comp_index, const 
  * @return 0 when valid.
  * @return 1 when validation fails.
  */
-int halir_workspace_validate(halir_workspace *work);
+int halir_simulation_setup_validate(halir_simulation_setup *work);
 
 /**
  * @brief Find the nearest index in a float vector for a target value.
@@ -522,7 +522,7 @@ size_t find_nearest_index(gsl_vector_float *v, float val);
  * @return 0 on success.
  * @return 1 on invalid workspace state or runtime setup failure.
  */
-int halir_test_calc(halir_workspace *work);
+int halir_test_calc(halir_simulation_setup *work);
 
 /**
  * @brief Allocate a standalone spectra container with data buffers.
@@ -558,7 +558,7 @@ void halir_spectra_free(halir_spectra *spectra);
  * @param nspectra Number of spectra entries to allocate.
  * @return Pointer to a new result object, or NULL on failure.
  */
-halir_result *halir_result_create(halir_workspace *workspace, size_t nspectra);
+halir_result *halir_result_create(halir_simulation_setup *workspace, size_t nspectra);
 
 /**
  * @brief Free a result object and all owned spectra buffers.
@@ -584,10 +584,10 @@ void halir_result_free(halir_result *result);
  * @param work Validated workspace.
  * @return Pointer to result object on success, or NULL on failure.
  */
-halir_result *halir_calculate_result(halir_workspace *work);
+halir_result *halir_calculate_result(halir_simulation_setup *work);
 
 // input str is made lower case and compared halir_Units
-halir_Units halir_Unit_from_str(char *str) {
+static inline halir_Units halir_Unit_from_str(char *str) {
   size_t length = strlen(str);
   for (int i=0; i < length; i++)
     str[i] = tolower(str[i]);
@@ -612,7 +612,7 @@ halir_Units halir_Unit_from_str(char *str) {
   return NONE;
 }
 
-void halir_print_workspace(halir_workspace *work) {
+static inline void halir_print_simulation_setup(halir_simulation_setup *work) {
   printf("Project\n");
   printf("  pname: %s\n", work->pname);
   printf("  rootDir: %s\n", work->rootDir);

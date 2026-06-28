@@ -21,22 +21,22 @@ and releasing resources.
 
 int run_example(void)
 {
-  halir_workspace *work = NULL;
+  halir_simulation_setup *work = NULL;
   size_t comp_idx = 0;
   int rc = 0;
 
-  work = halir_workspace_create();
+  work = halir_simulation_setup_create();
   if (work == NULL) {
     return 1;
   }
 
-  rc = halir_workspace_set_project(work, "ExampleProject", "/tmp", "API example");
+  rc = halir_simulation_setup_set_project(work, "ExampleProject", "/tmp", "API example");
   if (rc != 0) {
-    halir_workspace_free(work);
+    halir_simulation_setup_free(work);
     return rc;
   }
 
-  rc = halir_workspace_set_sample_env(
+  rc = halir_simulation_setup_set_sample_env(
       work,
       296.0, K,
       1.0, ATM,
@@ -47,42 +47,42 @@ int run_example(void)
       HALIR_TRANSMISSION,
       "");
   if (rc != 0) {
-    halir_workspace_free(work);
+    halir_simulation_setup_free(work);
     return rc;
   }
 
-  rc = halir_workspace_add_composition(work, "CO", "Natural", &comp_idx);
+  rc = halir_simulation_setup_add_composition(work, "CO", "Natural", &comp_idx);
   if (rc != 0) {
-    halir_workspace_free(work);
+    halir_simulation_setup_free(work);
     return rc;
   }
 
   rc = halir_compound_set_vmr(work, comp_idx, 5.921539600296e-05);
   if (rc != 0) {
-    halir_workspace_free(work);
+    halir_simulation_setup_free(work);
     return rc;
   }
 
   rc = halir_compound_load_prmfile(work, comp_idx, "tests/CO_test/CO.hpar");
   if (rc != 0) {
-    halir_workspace_free(work);
+    halir_simulation_setup_free(work);
     return rc;
   }
 
-  rc = halir_workspace_validate(work);
+  rc = halir_simulation_setup_validate(work);
   if (rc != 0) {
-    halir_workspace_free(work);
+    halir_simulation_setup_free(work);
     return rc;
   }
 
   rc = halir_test_calc(work);
-  halir_workspace_free(work);
+  halir_simulation_setup_free(work);
   return rc;
 }
 ```
 
 ## Notes
 
-- `halir_workspace_set_sample_env` normalizes core environment units to K, ATM, and CM.
-- `halir_workspace_validate` should be called before `halir_test_calc`.
-- Always call `halir_workspace_free` on every success and failure path.
+- `halir_simulation_setup_set_sample_env` normalizes core environment units to K, ATM, and CM.
+- `halir_simulation_setup_validate` should be called before `halir_test_calc`.
+- Always call `halir_simulation_setup_free` on every success and failure path.

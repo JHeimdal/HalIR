@@ -174,7 +174,7 @@ int main(int argc, char **argv)
   const double abs_tol = 1e-14;
   std::vector<Golden> golden;
 
-  halir_workspace *work = nullptr;
+  halir_simulation_setup *work = nullptr;
   halir_result *result = nullptr;
   const halir_spectra *s0 = nullptr;
   const halir_spectra *s1 = nullptr;
@@ -190,14 +190,14 @@ int main(int argc, char **argv)
     goto cleanup;
   }
 
-  work = halir_workspace_create();
+  work = halir_simulation_setup_create();
   if (work == nullptr) {
-    std::cout << "halir_workspace_create failed" << std::endl;
+    std::cout << "halir_simulation_setup_create failed" << std::endl;
     goto cleanup;
   }
 
-  if (halir_workspace_set_project(work, "CalcRegression", "/tmp", "") != 0 ||
-      halir_workspace_set_sample_env(work,
+  if (halir_simulation_setup_set_project(work, "CalcRegression", "/tmp", "") != 0 ||
+      halir_simulation_setup_set_sample_env(work,
                                      296.0, K,
                                      1.0, ATM,
                                      100.0, CM,
@@ -210,8 +210,8 @@ int main(int argc, char **argv)
     goto cleanup;
   }
 
-  if (halir_workspace_add_composition(work, "H2O", "Natural", &comp_a) != 0 ||
-      halir_workspace_add_composition(work, "H2O", "Natural", &comp_b) != 0 ||
+  if (halir_simulation_setup_add_composition(work, "H2O", "Natural", &comp_a) != 0 ||
+      halir_simulation_setup_add_composition(work, "H2O", "Natural", &comp_b) != 0 ||
       halir_compound_set_vmr(work, comp_a, 8.0e-4) != 0 ||
       halir_compound_set_vmr(work, comp_b, 6.0e-4) != 0 ||
       halir_compound_load_prmfile(work, comp_a, prm1.string().c_str()) != 0 ||
@@ -295,7 +295,7 @@ int main(int argc, char **argv)
 
 cleanup:
   halir_result_free(result);
-  halir_workspace_free(work);
+  halir_simulation_setup_free(work);
   std::filesystem::remove(prm1);
   std::filesystem::remove(prm2);
   return exit_code;

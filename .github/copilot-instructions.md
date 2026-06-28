@@ -22,7 +22,7 @@
 - Keep public API changes minimal and explicit.
 
 ## Memory and Resource Safety
-- Use halir_workspace_free for cleanup of objects returned by halir_parseJSONinput.
+- Use halir_simulation_setup_free for cleanup of objects returned by halir_parseJSONinput.
 - Ensure every opened file handle is closed on all success and failure paths.
 - For parser code, keep deterministic cleanup behavior (single cleanup path is preferred).
 - Avoid unchecked string copies into fixed-size buffers.

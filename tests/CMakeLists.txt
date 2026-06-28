@@ -2,15 +2,18 @@
 add_executable(test_input test_input.cpp)
 add_executable(test_hpar test_hpar.cpp)
 add_executable(test_calc test_calc.cpp)
+add_executable(test_cls test_cls.cpp)
 
 target_compile_features(test_input PRIVATE cxx_std_17)
 target_compile_features(test_hpar PRIVATE cxx_std_17)
 target_compile_features(test_calc PRIVATE cxx_std_17)
+target_compile_features(test_cls PRIVATE cxx_std_17)
 target_compile_definitions(test_calc PRIVATE HALIR_TESTS_SOURCE_DIR="${CMAKE_CURRENT_SOURCE_DIR}")
 
 target_link_libraries(test_input PRIVATE HalIR)
 target_link_libraries(test_hpar PRIVATE HalIR)
 target_link_libraries(test_calc PRIVATE HalIR)
+target_link_libraries(test_cls PRIVATE HalIR)
 
 enable_testing()
 add_test(NAME test_exec COMMAND $<TARGET_FILE:halir>)
@@ -48,4 +51,12 @@ add_test(NAME hpar_header_only_file_test COMMAND $<TARGET_FILE:test_hpar> 3)
 add_test(NAME hpar_missing_line_data_file_test COMMAND $<TARGET_FILE:test_hpar> 4)
 
 add_test(NAME calc_result_regression_test COMMAND $<TARGET_FILE:test_calc>)
+
+add_test(NAME cls_matrix_lifecycle COMMAND $<TARGET_FILE:test_cls> 0)
+add_test(NAME cls_grid_build COMMAND $<TARGET_FILE:test_cls> 1)
+add_test(NAME cls_resample_linear COMMAND $<TARGET_FILE:test_cls> 2)
+add_test(NAME cls_synthesize_A COMMAND $<TARGET_FILE:test_cls> 3)
+add_test(NAME cls_calibrate_recover COMMAND $<TARGET_FILE:test_cls> 4)
+add_test(NAME cls_predict_recover COMMAND $<TARGET_FILE:test_cls> 5)
+add_test(NAME cls_invalid_args COMMAND $<TARGET_FILE:test_cls> 6)
 

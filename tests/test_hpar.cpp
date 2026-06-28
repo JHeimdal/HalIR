@@ -12,16 +12,16 @@ extern "C" {
 namespace {
 
 // Helper to build minimal workspace with valid sample environment for prmfile loading tests
-halir_workspace* build_test_workspace()
+halir_simulation_setup* build_test_workspace()
 {
-  halir_workspace *work = halir_workspace_create();
+  halir_simulation_setup *work = halir_simulation_setup_create();
   if (work == nullptr) {
     return nullptr;
   }
 
-  if (halir_workspace_set_project(work, "TestProject", "/tmp/", "") != 0 ||
-      halir_workspace_set_sample_env(work, 303.15, K, 1.0, ATM, 300.0, M, 2000.0, 2245.0, 0.1, 0.1, HALIR_BOXCAR, HALIR_TRANSMISSION, "") != 0) {
-    halir_workspace_free(work);
+  if (halir_simulation_setup_set_project(work, "TestProject", "/tmp/", "") != 0 ||
+      halir_simulation_setup_set_sample_env(work, 303.15, K, 1.0, ATM, 300.0, M, 2000.0, 2245.0, 0.1, 0.1, HALIR_BOXCAR, HALIR_TRANSMISSION, "") != 0) {
+    halir_simulation_setup_free(work);
     return nullptr;
   }
 
@@ -113,7 +113,7 @@ int main(int argc, char **argv)
   vector<string> args(argv + 1, argv + argc);
   TEST test = (TEST)stoi(args[0]);
 
-  halir_workspace *workspace = build_test_workspace();
+  halir_simulation_setup *workspace = build_test_workspace();
   std::filesystem::path fixture_path;
   bool temporary_fixture_created = false;
   std::string test_prmfile;
@@ -124,9 +124,9 @@ int main(int argc, char **argv)
   }
 
   size_t comp_index;
-  if (halir_workspace_add_composition(workspace, "CO", "Natural", &comp_index) != 0) {
+  if (halir_simulation_setup_add_composition(workspace, "CO", "Natural", &comp_index) != 0) {
     std::cout << "Failed to add composition" << std::endl;
-    halir_workspace_free(workspace);
+    halir_simulation_setup_free(workspace);
     return 1;
   }
 
@@ -135,7 +135,7 @@ int main(int argc, char **argv)
       fixture_path = std::filesystem::temp_directory_path() / "halir_valid_test.hpar";
       if (!write_valid_prmfile(fixture_path)) {
         std::cout << "Could not create valid prmfile fixture" << std::endl;
-        halir_workspace_free(workspace);
+        halir_simulation_setup_free(workspace);
         return 1;
       }
       temporary_fixture_created = true;
@@ -148,7 +148,7 @@ int main(int argc, char **argv)
       fixture_path = std::filesystem::temp_directory_path() / "halir_truncated_test.hpar";
       if (!write_truncated_prmfile(fixture_path)) {
         std::cout << "Could not create truncated prmfile fixture" << std::endl;
-        halir_workspace_free(workspace);
+        halir_simulation_setup_free(workspace);
         return 1;
       }
       temporary_fixture_created = true;
@@ -158,7 +158,7 @@ int main(int argc, char **argv)
       fixture_path = std::filesystem::temp_directory_path() / "halir_header_only_test.hpar";
       if (!write_header_only_prmfile(fixture_path)) {
         std::cout << "Could not create header-only prmfile fixture" << std::endl;
-        halir_workspace_free(workspace);
+        halir_simulation_setup_free(workspace);
         return 1;
       }
       temporary_fixture_created = true;
@@ -168,7 +168,7 @@ int main(int argc, char **argv)
       fixture_path = std::filesystem::temp_directory_path() / "halir_missing_line_data_test.hpar";
       if (!write_missing_line_data_prmfile(fixture_path)) {
         std::cout << "Could not create missing-line-data prmfile fixture" << std::endl;
-        halir_workspace_free(workspace);
+        halir_simulation_setup_free(workspace);
         return 1;
       }
       temporary_fixture_created = true;
@@ -184,7 +184,7 @@ int main(int argc, char **argv)
       if (temporary_fixture_created) {
         std::filesystem::remove(fixture_path);
       }
-      halir_workspace_free(workspace);
+      halir_simulation_setup_free(workspace);
       return 1;
     }
     if (workspace->composition[comp_index]->hitran_prms == nullptr) {
@@ -192,7 +192,7 @@ int main(int argc, char **argv)
       if (temporary_fixture_created) {
         std::filesystem::remove(fixture_path);
       }
-      halir_workspace_free(workspace);
+      halir_simulation_setup_free(workspace);
       return 1;
     }
     if (workspace->composition[comp_index]->hitran_head.ndatapnts <= 0) {
@@ -200,13 +200,13 @@ int main(int argc, char **argv)
       if (temporary_fixture_created) {
         std::filesystem::remove(fixture_path);
       }
-      halir_workspace_free(workspace);
+      halir_simulation_setup_free(workspace);
       return 1;
     }
     if (temporary_fixture_created) {
       std::filesystem::remove(fixture_path);
     }
-    halir_workspace_free(workspace);
+    halir_simulation_setup_free(workspace);
     return 0;
   }
 
@@ -216,10 +216,10 @@ int main(int argc, char **argv)
 
   if (load_result == 0) {
     std::cout << "Expected prmfile failure to return non-zero" << std::endl;
-    halir_workspace_free(workspace);
+    halir_simulation_setup_free(workspace);
     return 1;
   }
 
-  halir_workspace_free(workspace);
+  halir_simulation_setup_free(workspace);
   return 0;
 }

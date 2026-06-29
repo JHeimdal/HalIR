@@ -1,0 +1,220 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "HalIR input schema",
+  "description": "Schema for the current halir_parseJSONinput JSON structure.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["input"],
+  "properties": {
+    "$schema": {
+      "type": "string"
+    },
+    "input": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["project", "sampleEnv", "composition"],
+      "properties": {
+        "project": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["pname", "rootDir", "pcomments", "pfiles"],
+          "properties": {
+            "pname": {
+              "type": "string",
+              "maxLength": 1023
+            },
+            "rootDir": {
+              "type": "string",
+              "maxLength": 1023
+            },
+            "hapi_db": {
+              "type": "string",
+              "maxLength": 1023,
+              "$comment": "Present in existing examples but currently ignored by halir_parseJSONinput."
+            },
+            "pcomments": {
+              "type": "string",
+              "maxLength": 4095
+            },
+            "pfiles": {
+              "type": "array",
+              "items": {
+                "$ref": "#/$defs/pfileItem"
+              }
+            }
+          }
+        },
+        "sampleEnv": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "temp",
+            "tempU",
+            "press",
+            "pressU",
+            "pathL",
+            "pathLU",
+            "ROI",
+            "res",
+            "apod",
+            "fov",
+            "ftype",
+            "bgfile"
+          ],
+          "properties": {
+            "temp": {
+              "type": "number"
+            },
+            "tempU": {
+              "$ref": "#/$defs/temperatureUnit"
+            },
+            "press": {
+              "type": "number",
+              "exclusiveMinimum": 0
+            },
+            "pressU": {
+              "$ref": "#/$defs/pressureUnit"
+            },
+            "pathL": {
+              "type": "number",
+              "exclusiveMinimum": 0
+            },
+            "pathLU": {
+              "$ref": "#/$defs/pathUnit"
+            },
+            "ROI": {
+              "type": "array",
+              "minItems": 2,
+              "maxItems": 2,
+              "items": {
+                "type": "number"
+              }
+            },
+            "res": {
+              "type": "number",
+              "exclusiveMinimum": 0
+            },
+            "apod": {
+              "$ref": "#/$defs/apodization"
+            },
+            "fov": {
+              "type": "number",
+              "minimum": 0
+            },
+            "ftype": {
+              "$ref": "#/$defs/fileType"
+            },
+            "bgfile": {
+              "type": "string",
+              "maxLength": 1023
+            }
+          }
+        },
+        "composition": {
+          "type": "array",
+          "items": {
+            "allOf": [
+              {
+                "$ref": "#/$defs/compositionBase"
+              },
+              {
+                "oneOf": [
+                  {
+                    "required": ["vmr"],
+                    "not": {
+                      "anyOf": [
+                        { "required": ["conc"] },
+                        { "required": ["concU"] }
+                      ]
+                    }
+                  },
+                  {
+                    "required": ["conc", "concU"],
+                    "not": {
+                      "required": ["vmr"]
+                    }
+                  },
+                  {
+                    "required": ["vmr", "conc", "concU"]
+                  }
+                ]
+              }
+            ]
+          }
+        }
+      }
+    }
+  },
+  "$defs": {
+    "temperatureUnit": {
+      "type": "string",
+      "pattern": "^(?:[Kk]|[Cc]|[Ff])$",
+      "examples": ["K", "C", "F"]
+    },
+    "pressureUnit": {
+      "type": "string",
+      "pattern": "^(?:[Aa][Tt][Mm]|[Mm][Bb][Aa][Rr]|[Bb][Aa][Rr]|[Pp][Aa]|[Hh][Pp][Aa]|[Mm][Mm][Hh][Gg])$",
+      "examples": ["atm", "mbar", "bar", "pa", "hpa", "mmhg"]
+    },
+    "pathUnit": {
+      "type": "string",
+      "pattern": "^(?:[Mm][Mm]|[Cc][Mm]|[Dd][Mm]|[Mm]|[Kk][Mm])$",
+      "examples": ["mm", "cm", "dm", "m", "km"]
+    },
+    "concentrationUnit": {
+      "type": "string",
+      "pattern": "^(?:[Pp][Pp][Mm]|[Pp][Pp][Tt]|[Pp][Pp][Bb]|[Aa][Tt][Mm]|[Mm][Bb][Aa][Rr]|[Bb][Aa][Rr]|[Pp][Aa]|[Hh][Pp][Aa]|[Mm][Mm][Hh][Gg])$",
+      "examples": ["ppm", "ppt", "ppb", "atm", "mbar", "bar", "pa", "hpa", "mmhg"]
+    },
+    "apodization": {
+      "type": "string",
+      "pattern": "^(?:[Bb]oxcar|[Tt]riangle|[Hh]appgenzel)$",
+      "examples": ["Boxcar", "Triangle", "Happgenzel"]
+    },
+    "fileType": {
+      "type": "string",
+      "pattern": "^(?:[Tt]ransmission|[Aa]bsorbance)$",
+      "examples": ["Transmission", "Absorbance"]
+    },
+    "pfileItem": {
+      "type": ["string", "null"],
+      "maxLength": 1023
+    },
+    "compositionBase": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["molec", "isotop", "prmfile"],
+      "properties": {
+        "molec": {
+          "type": "string",
+          "maxLength": 5,
+          "examples": ["CO", "H2O"]
+        },
+        "isotop": {
+          "type": "string",
+          "maxLength": 11,
+          "examples": ["Natural", "(12C)(16O)"]
+        },
+        "vmr": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1,
+          "description": "Volume mixing ratio."
+        },
+        "conc": {
+          "type": "number",
+          "minimum": 0,
+          "description": "Concentration value interpreted with concU."
+        },
+        "concU": {
+          "$ref": "#/$defs/concentrationUnit"
+        },
+        "prmfile": {
+          "type": "string",
+          "maxLength": 1023,
+          "description": "Optional prmfile path; empty string means no prmfile."
+        }
+      }
+    }
+  }
+}

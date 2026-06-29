@@ -171,6 +171,47 @@ halir_matrix *halir_cls_component_responses(const halir_result *res,
 halir_matrix *halir_cls_synthesize_A(const halir_matrix *C, const halir_matrix *R);
 
 /**
+ * @brief Return a copy of a matrix with each row scaled by a caller-supplied factor.
+ *
+ * This helper is intended for caller-side preprocessing of calibration or
+ * sample matrices, including inverse-pathlength normalization.
+ *
+ * @param M            Source matrix, Nrows x Ncols.
+ * @param row_scale    One multiplicative scale factor per row, length Nrows.
+ * @return New matrix Nrows x Ncols or NULL on invalid args / failure.
+ */
+halir_matrix *halir_cls_matrix_scale_rows(const halir_matrix *M,
+                                          const halir_num *row_scale);
+
+/**
+ * @brief Append one explicit design column to a concentration design matrix.
+ *
+ * This helper is intended for caller-controlled augmented CLS designs, such as
+ * constant intercept terms or inverse-pathlength columns. The appended column
+ * must contain one value per sample (row of @p C).
+ *
+ * @param C       Base concentration design, Nsamples x Ncomp.
+ * @param column  Column values to append, length Nsamples.
+ * @return New matrix Nsamples x (Ncomp + 1) or NULL on invalid args / failure.
+ */
+halir_matrix *halir_cls_design_augment_column(const halir_matrix *C,
+                                              const halir_num *column);
+
+/**
+ * @brief Append an inverse-pathlength column to a concentration design matrix.
+ *
+ * Each pathlength value must be finite and strictly positive. The appended
+ * column contains 1/pathlength for each sample row and is intended for the
+ * explicit intercept/pathlength workflow described in the CLS paper.
+ *
+ * @param C            Base concentration design, Nsamples x Ncomp.
+ * @param pathlength   Pathlength values, length Nsamples.
+ * @return New matrix Nsamples x (Ncomp + 1) or NULL on invalid args / failure.
+ */
+halir_matrix *halir_cls_design_augment_inverse_pathlength(const halir_matrix *C,
+                                                          const halir_num *pathlength);
+
+/**
  * @brief Build an identity concentration design (one pure sample per component).
  * @param ncomp Number of components.
  * @return New Ncomp x Ncomp identity matrix or NULL on failure.
@@ -195,6 +236,26 @@ halir_matrix *halir_cls_design_identity(size_t ncomp);
 halir_cls_calibration *halir_cls_calibrate(const halir_matrix *A,
                                            const halir_matrix *C,
                                            const halir_cls_grid *grid);
+
+/**
+ * @brief Solve the weighted CLS calibration matrix K from A, C, and W.
+ *
+ * Solves the weighted least-squares system A = C * K for K (Ncomp x Nwave)
+ * using per-frequency diagonal weights. The weight matrix W must have the
+ * same shape as A, where W[i,j] is the weight applied to sample i at
+ * frequency j. Each spectral column is solved independently after scaling the
+ * calibration equations by sqrt(W[:,j]). Requires Nsamples >= Ncomp.
+ *
+ * @param A        Calibration spectra, Nsamples x Nwave.
+ * @param C        Concentrations, Nsamples x Ncomp.
+ * @param W        Weights, Nsamples x Nwave.
+ * @param grid     Wavenumber grid (grid->n must equal A->cols); copied into output.
+ * @return New calibration object or NULL on invalid args / failure.
+ */
+halir_cls_calibration *halir_cls_calibrate_weighted(const halir_matrix *A,
+                                                    const halir_matrix *C,
+                                                    const halir_matrix *W,
+                                                    const halir_cls_grid *grid);
 
 /**
  * @brief Free a calibration object (NULL-safe).

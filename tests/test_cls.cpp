@@ -25,6 +25,11 @@ int main(int argc, char **argv)
     CALIBRATE_RECOVER,
     PREDICT_RECOVER,
     INVALID_ARGS,
+    WEIGHTED_CALIBRATE,
+    RESAMPLE_INVALID_ORDER,
+    AUGMENTED_INTERCEPT_RECOVER,
+    AUGMENTED_INTERCEPT_SINGULAR_REJECT,
+    PATHLENGTH_HELPERS_RECOVER,
   };
 
   using namespace std;
@@ -233,7 +238,10 @@ int main(int argc, char **argv)
     halir_cls_window w = {1.0, 2.0};
     if (halir_cls_build_grid(&w, 1, 0.0) != nullptr) { cout << "build_grid step0" << endl; return 1; }
     if (halir_cls_synthesize_A(nullptr, nullptr) != nullptr) { cout << "synth null" << endl; return 1; }
+    if (halir_cls_matrix_scale_rows(nullptr, nullptr) != nullptr) { cout << "scale rows null" << endl; return 1; }
+    if (halir_cls_design_augment_inverse_pathlength(nullptr, nullptr) != nullptr) { cout << "augment inverse pathlength null" << endl; return 1; }
     if (halir_cls_calibrate(nullptr, nullptr, nullptr) != nullptr) { cout << "calibrate null" << endl; return 1; }
+    if (halir_cls_calibrate_weighted(nullptr, nullptr, nullptr, nullptr) != nullptr) { cout << "weighted calibrate null" << endl; return 1; }
     if (halir_cls_predict(nullptr, nullptr) != nullptr) { cout << "predict null" << endl; return 1; }
     // dimension mismatch in synthesize: C cols != R rows
     halir_matrix *C = halir_matrix_create(2, 3);
@@ -244,10 +252,278 @@ int main(int argc, char **argv)
       return 1;
     }
     halir_matrix_free(C); halir_matrix_free(R);
+    C = halir_matrix_create(2, 2);
+    halir_num bad_path[2] = {1.0, 0.0};
+    if (halir_cls_design_augment_inverse_pathlength(C, bad_path) != nullptr) {
+      cout << "zero pathlength should be rejected" << endl;
+      halir_matrix_free(C);
+      return 1;
+    }
+    halir_matrix_free(C);
     // NULL-safe frees
     halir_cls_grid_free(nullptr);
     halir_cls_calibration_free(nullptr);
     halir_cls_prediction_free(nullptr);
+    return 0;
+  }
+
+  if (test == WEIGHTED_CALIBRATE) {
+    const size_t nc = 2, nw = 1, ns = 3;
+    halir_matrix *C = halir_matrix_create(ns, nc);
+    halir_matrix *A = halir_matrix_create(ns, nw);
+    halir_matrix *W = halir_matrix_create(ns, nw);
+    halir_cls_grid *grid = halir_cls_grid_create(nw);
+    if (C == nullptr || A == nullptr || W == nullptr || grid == nullptr) {
+      cout << "weighted test allocation failed" << endl;
+      return 1;
+    }
+
+    halir_num cvals[6] = {1, 0, 0, 1, 1, 1};
+    halir_num avals[3] = {1, 2, 13};
+    halir_num wvals[3] = {1, 1, 0.01};
+    halir_num ones[3] = {1, 1, 1};
+    for (size_t i = 0; i < ns * nc; i++) C->data[i] = cvals[i];
+    for (size_t i = 0; i < ns; i++) A->data[i] = avals[i];
+    grid->wavenum[0] = 10.0;
+
+    for (size_t i = 0; i < ns; i++) W->data[i] = ones[i];
+    halir_cls_calibration *unweighted = halir_cls_calibrate(A, C, grid);
+    halir_cls_calibration *ones_weighted = halir_cls_calibrate_weighted(A, C, W, grid);
+    if (unweighted == nullptr || ones_weighted == nullptr) {
+      cout << "weighted test baseline calibration failed" << endl;
+      return 1;
+    }
+
+    if (!approx(unweighted->K->data[0], ones_weighted->K->data[0], 1e-9) ||
+        !approx(unweighted->K->data[1], ones_weighted->K->data[1], 1e-9)) {
+      cout << "all-ones weights should match unweighted calibration" << endl;
+      return 1;
+    }
+
+    for (size_t i = 0; i < ns; i++) W->data[i] = wvals[i];
+    halir_cls_calibration *weighted = halir_cls_calibrate_weighted(A, C, W, grid);
+    if (weighted == nullptr) {
+      cout << "weighted calibration returned NULL" << endl;
+      return 1;
+    }
+
+    halir_num truth0 = 1.0;
+    halir_num truth1 = 2.0;
+    halir_num unweighted_err = std::abs(unweighted->K->data[0] - truth0) + std::abs(unweighted->K->data[1] - truth1);
+    halir_num weighted_err = std::abs(weighted->K->data[0] - truth0) + std::abs(weighted->K->data[1] - truth1);
+    if (!(weighted_err < unweighted_err)) {
+      cout << "weighted calibration did not reduce error" << endl;
+      return 1;
+    }
+
+    halir_cls_calibration_free(weighted);
+    halir_cls_calibration_free(ones_weighted);
+    halir_cls_calibration_free(unweighted);
+    halir_matrix_free(W);
+    halir_matrix_free(A);
+    halir_matrix_free(C);
+    halir_cls_grid_free(grid);
+    return 0;
+  }
+
+  if (test == RESAMPLE_INVALID_ORDER) {
+    halir_num sw[3] = {1.0, 3.0, 2.0};
+    halir_num sd[3] = {1.0, 3.0, 2.0};
+    halir_cls_window win = {1.0, 3.0};
+    halir_cls_grid *grid = halir_cls_build_grid(&win, 1, 1.0);
+    if (grid == nullptr) {
+      cout << "grid build failed" << endl;
+      return 1;
+    }
+    vector<halir_num> out(grid->n, 0.0);
+    if (halir_cls_resample(sw, sd, 3, grid, out.data()) == 0) {
+      cout << "resample should reject non-monotonic input" << endl;
+      halir_cls_grid_free(grid);
+      return 1;
+    }
+    halir_cls_grid_free(grid);
+    return 0;
+  }
+
+  if (test == AUGMENTED_INTERCEPT_RECOVER) {
+    const size_t ns = 3, nc = 2, nw = 3;
+    halir_matrix *C = halir_matrix_create(ns, nc);
+    halir_matrix *Raug = halir_matrix_create(nc + 1, nw);
+    halir_cls_grid *grid = halir_cls_grid_create(nw);
+    halir_num intercept[3] = {1.0, 1.0, 1.0};
+    if (C == nullptr || Raug == nullptr || grid == nullptr) {
+      cout << "augmented intercept allocation failed" << endl;
+      return 1;
+    }
+
+    halir_num cvals[6] = {1, 0, 0, 1, 1, 1};
+    halir_num raug_vals[9] = {
+      1.0, 2.0, 3.0,
+      0.5, 0.0, 1.0,
+      0.1, 0.1, 0.1,
+    };
+    for (size_t i = 0; i < ns * nc; i++) C->data[i] = cvals[i];
+    for (size_t i = 0; i < (nc + 1) * nw; i++) Raug->data[i] = raug_vals[i];
+    for (size_t i = 0; i < nw; i++) grid->wavenum[i] = 10.0 + i;
+
+    halir_matrix *Caug = halir_cls_design_augment_column(C, intercept);
+    if (Caug == nullptr) {
+      cout << "design augmentation failed" << endl;
+      return 1;
+    }
+
+    halir_matrix *A = halir_cls_synthesize_A(Caug, Raug);
+    if (A == nullptr) {
+      cout << "augmented synthesize failed" << endl;
+      return 1;
+    }
+
+    halir_cls_calibration *cal = halir_cls_calibrate(A, Caug, grid);
+    if (cal == nullptr) {
+      cout << "augmented calibrate failed" << endl;
+      return 1;
+    }
+
+    for (size_t i = 0; i < (nc + 1) * nw; i++) {
+      if (!approx(cal->K->data[i], Raug->data[i], 1e-7)) {
+        cout << "augmented calibration did not recover intercept row at " << i << endl;
+        return 1;
+      }
+    }
+
+    halir_cls_calibration_free(cal);
+    halir_matrix_free(A);
+    halir_matrix_free(Caug);
+    halir_matrix_free(Raug);
+    halir_matrix_free(C);
+    halir_cls_grid_free(grid);
+    return 0;
+  }
+
+  if (test == AUGMENTED_INTERCEPT_SINGULAR_REJECT) {
+    const size_t ns = 3, nc = 2, nw = 2;
+    halir_matrix *C = halir_matrix_create(ns, nc);
+    halir_matrix *Raug = halir_matrix_create(nc + 1, nw);
+    halir_cls_grid *grid = halir_cls_grid_create(nw);
+    halir_num intercept[3] = {1.0, 1.0, 1.0};
+    if (C == nullptr || Raug == nullptr || grid == nullptr) {
+      cout << "singular intercept allocation failed" << endl;
+      return 1;
+    }
+
+    halir_num cvals[6] = {1.0, 0.0,
+                          0.0, 1.0,
+                          0.5, 0.5};
+    halir_num raug_vals[6] = {
+      1.0, 2.0,
+      0.5, 1.5,
+      0.1, 0.1,
+    };
+    for (size_t i = 0; i < ns * nc; i++) C->data[i] = cvals[i];
+    for (size_t i = 0; i < (nc + 1) * nw; i++) Raug->data[i] = raug_vals[i];
+    for (size_t i = 0; i < nw; i++) grid->wavenum[i] = 10.0 + i;
+
+    halir_matrix *Caug = halir_cls_design_augment_column(C, intercept);
+    if (Caug == nullptr) {
+      cout << "singular design augmentation failed" << endl;
+      return 1;
+    }
+
+    halir_matrix *A = halir_cls_synthesize_A(Caug, Raug);
+    if (A == nullptr) {
+      cout << "singular synthesize failed" << endl;
+      return 1;
+    }
+
+    halir_cls_calibration *cal = halir_cls_calibrate(A, Caug, grid);
+    if (cal != nullptr) {
+      cout << "singular augmented design should be rejected" << endl;
+      return 1;
+    }
+
+    halir_matrix_free(A);
+    halir_matrix_free(Caug);
+    halir_matrix_free(Raug);
+    halir_matrix_free(C);
+    halir_cls_grid_free(grid);
+    return 0;
+  }
+
+  if (test == PATHLENGTH_HELPERS_RECOVER) {
+    const size_t ns = 3, nc = 2, nw = 3;
+    halir_matrix *C = halir_matrix_create(ns, nc);
+    halir_matrix *Raug = halir_matrix_create(nc + 1, nw);
+    halir_cls_grid *grid = halir_cls_grid_create(nw);
+    halir_num pathlength[3] = {1.0, 2.0, 0.5};
+    halir_num inv_pathlength[3] = {1.0, 0.5, 2.0};
+    if (C == nullptr || Raug == nullptr || grid == nullptr) {
+      cout << "pathlength helper allocation failed" << endl;
+      return 1;
+    }
+
+    halir_num cvals[6] = {1.0, 0.0,
+                          0.0, 1.0,
+                          1.0, 1.0};
+    halir_num raug_vals[9] = {
+      1.0, 2.0, 3.0,
+      0.5, 0.0, 1.0,
+      0.1, 0.1, 0.1,
+    };
+    for (size_t i = 0; i < ns * nc; i++) C->data[i] = cvals[i];
+    for (size_t i = 0; i < (nc + 1) * nw; i++) Raug->data[i] = raug_vals[i];
+    for (size_t i = 0; i < nw; i++) grid->wavenum[i] = 10.0 + i;
+
+    halir_matrix *Caug = halir_cls_design_augment_inverse_pathlength(C, pathlength);
+    if (Caug == nullptr) {
+      cout << "inverse pathlength augmentation failed" << endl;
+      return 1;
+    }
+    for (size_t i = 0; i < ns; i++) {
+      if (!approx(Caug->data[i * Caug->cols + nc], inv_pathlength[i], 1e-9)) {
+        cout << "inverse pathlength column mismatch at row " << i << endl;
+        return 1;
+      }
+    }
+
+    halir_matrix *A_scaled = halir_cls_synthesize_A(Caug, Raug);
+    if (A_scaled == nullptr) {
+      cout << "scaled synthesize failed" << endl;
+      return 1;
+    }
+
+    halir_matrix *A_measured = halir_cls_matrix_scale_rows(A_scaled, pathlength);
+    if (A_measured == nullptr) {
+      cout << "pathlength row scaling failed" << endl;
+      return 1;
+    }
+
+    halir_matrix *A_normalized = halir_cls_matrix_scale_rows(A_measured, inv_pathlength);
+    if (A_normalized == nullptr) {
+      cout << "inverse pathlength normalization failed" << endl;
+      return 1;
+    }
+
+    halir_cls_calibration *cal = halir_cls_calibrate(A_normalized, Caug, grid);
+    if (cal == nullptr) {
+      cout << "pathlength-normalized calibrate failed" << endl;
+      return 1;
+    }
+
+    for (size_t i = 0; i < (nc + 1) * nw; i++) {
+      if (!approx(cal->K->data[i], Raug->data[i], 1e-7)) {
+        cout << "pathlength-normalized calibration mismatch at " << i << endl;
+        return 1;
+      }
+    }
+
+    halir_cls_calibration_free(cal);
+    halir_matrix_free(A_normalized);
+    halir_matrix_free(A_measured);
+    halir_matrix_free(A_scaled);
+    halir_matrix_free(Caug);
+    halir_matrix_free(Raug);
+    halir_matrix_free(C);
+    halir_cls_grid_free(grid);
     return 0;
   }
 

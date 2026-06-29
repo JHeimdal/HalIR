@@ -1,4 +1,5 @@
 {
+        "$schema": "../halir-input.schema.json",
   "input": {
     "project": {
             "pname": "CO_Test3",
@@ -25,7 +26,6 @@
             {"molec": "CO",
              "isotop": "(12C)(16O)",
              "vmr": 5.921539600296e-05,
-             "pressU": "mb",
              "prmfile": ""}
     ]
   }

@@ -15,9 +15,38 @@ target_link_libraries(test_hpar PRIVATE HalIR)
 target_link_libraries(test_calc PRIVATE HalIR)
 target_link_libraries(test_cls PRIVATE HalIR)
 
+set(HALIR_SCHEMA_PYTHON "$ENV{WORKON_HOME}/HalIR/bin/python")
+if(NOT EXISTS "${HALIR_SCHEMA_PYTHON}")
+	find_package(Python3 COMPONENTS Interpreter QUIET)
+	if(Python3_Interpreter_FOUND)
+		set(HALIR_SCHEMA_PYTHON "${Python3_EXECUTABLE}")
+	else()
+		set(HALIR_SCHEMA_PYTHON "")
+	endif()
+endif()
+
+set(HALIR_HAVE_JSONSCHEMA FALSE)
+if(HALIR_SCHEMA_PYTHON)
+	execute_process(
+		COMMAND "${HALIR_SCHEMA_PYTHON}" -c "import jsonschema"
+		RESULT_VARIABLE HALIR_JSONSCHEMA_IMPORT_RESULT
+		OUTPUT_QUIET
+		ERROR_QUIET
+	)
+	if(HALIR_JSONSCHEMA_IMPORT_RESULT EQUAL 0)
+		set(HALIR_HAVE_JSONSCHEMA TRUE)
+	endif()
+endif()
+
 enable_testing()
 add_test(NAME test_exec COMMAND $<TARGET_FILE:halir>)
 set_property(TEST test_exec PROPERTY WILL_FAIL TRUE)
+if(HALIR_HAVE_JSONSCHEMA)
+	add_test(
+		NAME input_schema_validation
+		COMMAND "${HALIR_SCHEMA_PYTHON}" ${PROJECT_SOURCE_DIR}/apps/validate_input_schema.py ${PROJECT_SOURCE_DIR}/apps/input.json
+	)
+endif()
 add_test(NAME input_units_test_F_TO_K COMMAND $<TARGET_FILE:test_input> 0)
 add_test(NAME input_units_test_C_TO_K COMMAND $<TARGET_FILE:test_input> 1)
 add_test(NAME input_units_test_BAR_TO_ATM COMMAND $<TARGET_FILE:test_input> 2)
@@ -59,4 +88,9 @@ add_test(NAME cls_synthesize_A COMMAND $<TARGET_FILE:test_cls> 3)
 add_test(NAME cls_calibrate_recover COMMAND $<TARGET_FILE:test_cls> 4)
 add_test(NAME cls_predict_recover COMMAND $<TARGET_FILE:test_cls> 5)
 add_test(NAME cls_invalid_args COMMAND $<TARGET_FILE:test_cls> 6)
+add_test(NAME cls_weighted_calibrate COMMAND $<TARGET_FILE:test_cls> 7)
+add_test(NAME cls_resample_invalid_order COMMAND $<TARGET_FILE:test_cls> 8)
+add_test(NAME cls_augmented_intercept_recover COMMAND $<TARGET_FILE:test_cls> 9)
+add_test(NAME cls_augmented_intercept_singular_reject COMMAND $<TARGET_FILE:test_cls> 10)
+add_test(NAME cls_pathlength_helpers_recover COMMAND $<TARGET_FILE:test_cls> 11)
 

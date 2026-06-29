@@ -119,7 +119,7 @@ if __name__ == '__main__':
     args = parser.parse_args()
     if args.input:
         infile = Path(args.input)
-        if infile.exists() and infile.is_file:
+        if infile.exists() and infile.is_file():
             main(infile)
     elif args.listMolec:
         mol = list({v[-1] for _,v in hp.ISO_ID.items()})

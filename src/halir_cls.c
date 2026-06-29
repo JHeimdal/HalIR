@@ -2,6 +2,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <float.h>
 #include <math.h>
 
 #include <gsl/gsl_matrix.h>
@@ -141,6 +142,222 @@ static size_t lower_bracket(const halir_num *src, size_t n, halir_num val)
   return lo - 1;
 }
 
+static int validate_strictly_increasing(const halir_num *src, const halir_num *data, size_t n)
+{
+  if ((src == NULL) || (data == NULL) || (n == 0)) {
+    return 1;
+  }
+
+  for (size_t i = 0; i < n; i++) {
+    if ((!isfinite(src[i])) || (!isfinite(data[i]))) {
+      fprintf(stderr, "halir_cls_resample: source contains non-finite values\n");
+      return 1;
+    }
+    if ((i > 0) && (src[i] <= src[i - 1])) {
+      fprintf(stderr, "halir_cls_resample: source wavenumbers must be strictly increasing\n");
+      return 1;
+    }
+  }
+
+  return 0;
+}
+
+static halir_cls_calibration *halir_cls_calibration_create(size_t nc,
+                                                           size_t nw,
+                                                           const halir_cls_grid *grid)
+{
+  halir_cls_calibration *cal;
+
+  cal = (halir_cls_calibration*)calloc(1, sizeof(halir_cls_calibration));
+  if (cal == NULL) {
+    return NULL;
+  }
+
+  cal->ncomp = nc;
+  cal->grid.wavenum = (halir_num*)calloc(nw, sizeof(halir_num));
+  cal->K = halir_matrix_create(nc, nw);
+  if ((cal->grid.wavenum == NULL) || (cal->K == NULL)) {
+    halir_cls_calibration_free(cal);
+    return NULL;
+  }
+
+  cal->grid.n = nw;
+  memcpy(cal->grid.wavenum, grid->wavenum, nw * sizeof(halir_num));
+  return cal;
+}
+
+static int qr_has_full_column_rank(const gsl_matrix *QR, size_t rows, size_t cols)
+{
+  double max_diag = 0.0;
+  double tol;
+
+  if ((QR == NULL) || (rows == 0) || (cols == 0)) {
+    return 0;
+  }
+
+  for (size_t i = 0; i < cols; i++) {
+    double diag = fabs(gsl_matrix_get(QR, i, i));
+    if (diag > max_diag) {
+      max_diag = diag;
+    }
+  }
+
+  if (max_diag == 0.0) {
+    return 0;
+  }
+
+  tol = DBL_EPSILON * (double)((rows > cols) ? rows : cols) * max_diag * 16.0;
+  for (size_t i = 0; i < cols; i++) {
+    if (fabs(gsl_matrix_get(QR, i, i)) <= tol) {
+      return 0;
+    }
+  }
+
+  return 1;
+}
+
+static halir_cls_calibration *halir_cls_calibrate_weighted_impl(const halir_matrix *A,
+                                                                const halir_matrix *C,
+                                                                const halir_matrix *W,
+                                                                const halir_cls_grid *grid)
+{
+  halir_cls_calibration *cal = NULL;
+  gsl_matrix *QR = NULL;
+  gsl_vector *tau = NULL;
+  gsl_vector *b = NULL;
+  gsl_vector *x = NULL;
+  gsl_vector *residual = NULL;
+  gsl_error_handler_t *old_handler;
+  size_t ns, nc, nw;
+
+  if ((A == NULL) || (C == NULL) || (grid == NULL) ||
+      (A->data == NULL) || (C->data == NULL) || (grid->wavenum == NULL)) {
+    fprintf(stderr, "halir_cls_calibrate: invalid arguments\n");
+    return NULL;
+  }
+
+  ns = A->rows;
+  nc = C->cols;
+  nw = A->cols;
+
+  if (C->rows != ns) {
+    fprintf(stderr, "halir_cls_calibrate: A rows (%zu) != C rows (%zu)\n", ns, C->rows);
+    return NULL;
+  }
+  if (grid->n != nw) {
+    fprintf(stderr, "halir_cls_calibrate: grid size (%zu) != A cols (%zu)\n", grid->n, nw);
+    return NULL;
+  }
+  if (ns < nc) {
+    fprintf(stderr, "halir_cls_calibrate: need samples (%zu) >= components (%zu)\n", ns, nc);
+    return NULL;
+  }
+  if (W != NULL) {
+    if ((W->data == NULL) || (W->rows != ns) || (W->cols != nw)) {
+      fprintf(stderr, "halir_cls_calibrate_weighted: weights must match A dimensions\n");
+      return NULL;
+    }
+  }
+
+  cal = halir_cls_calibration_create(nc, nw, grid);
+  if (cal == NULL) {
+    fprintf(stderr, "halir_cls_calibrate: allocation failed\n");
+    return NULL;
+  }
+
+  QR = gsl_matrix_alloc(ns, nc);
+  tau = gsl_vector_alloc(nc);
+  b = gsl_vector_alloc(ns);
+  x = gsl_vector_alloc(nc);
+  residual = gsl_vector_alloc(ns);
+  if ((QR == NULL) || (tau == NULL) || (b == NULL) || (x == NULL) || (residual == NULL)) {
+    fprintf(stderr, "halir_cls_calibrate: GSL allocation failed\n");
+    goto fail;
+  }
+
+  old_handler = gsl_set_error_handler_off();
+
+  if (W == NULL) {
+    gsl_matrix_const_view cv = gsl_matrix_const_view_array(C->data, ns, nc);
+    if (gsl_matrix_memcpy(QR, &cv.matrix) != 0) {
+      fprintf(stderr, "halir_cls_calibrate: matrix copy failed\n");
+      gsl_set_error_handler(old_handler);
+      goto fail;
+    }
+    if (gsl_linalg_QR_decomp(QR, tau) != 0) {
+      gsl_set_error_handler(old_handler);
+      fprintf(stderr, "halir_cls_calibrate: QR decomposition failed\n");
+      goto fail;
+    }
+    if (!qr_has_full_column_rank(QR, ns, nc)) {
+      gsl_set_error_handler(old_handler);
+      fprintf(stderr, "halir_cls_calibrate: calibration design is rank deficient\n");
+      goto fail;
+    }
+  }
+
+  for (size_t j = 0; j < nw; j++) {
+    if (W != NULL) {
+      for (size_t i = 0; i < ns; i++) {
+        halir_num weight = W->data[i * nw + j];
+        halir_num scale;
+
+        if ((!isfinite(weight)) || (weight < 0.0)) {
+          gsl_set_error_handler(old_handler);
+          fprintf(stderr, "halir_cls_calibrate_weighted: invalid weight at sample %zu, frequency %zu\n", i, j);
+          goto fail;
+        }
+
+        scale = sqrt(weight);
+        gsl_vector_set(b, i, scale * A->data[i * nw + j]);
+        for (size_t r = 0; r < nc; r++) {
+          gsl_matrix_set(QR, i, r, scale * C->data[i * nc + r]);
+        }
+      }
+      if (gsl_linalg_QR_decomp(QR, tau) != 0) {
+        gsl_set_error_handler(old_handler);
+        fprintf(stderr, "halir_cls_calibrate_weighted: QR decomposition failed (column %zu)\n", j);
+        goto fail;
+      }
+      if (!qr_has_full_column_rank(QR, ns, nc)) {
+        gsl_set_error_handler(old_handler);
+        fprintf(stderr, "halir_cls_calibrate_weighted: calibration design is rank deficient at column %zu\n", j);
+        goto fail;
+      }
+    } else {
+      for (size_t i = 0; i < ns; i++) {
+        gsl_vector_set(b, i, A->data[i * nw + j]);
+      }
+    }
+
+    if (gsl_linalg_QR_lssolve(QR, tau, b, x, residual) != 0) {
+      gsl_set_error_handler(old_handler);
+      fprintf(stderr, "halir_cls_calibrate: least-squares solve failed (column %zu)\n", j);
+      goto fail;
+    }
+    for (size_t i = 0; i < nc; i++) {
+      cal->K->data[i * nw + j] = gsl_vector_get(x, i);
+    }
+  }
+
+  gsl_set_error_handler(old_handler);
+  gsl_matrix_free(QR);
+  gsl_vector_free(tau);
+  gsl_vector_free(b);
+  gsl_vector_free(x);
+  gsl_vector_free(residual);
+  return cal;
+
+fail:
+  gsl_matrix_free(QR);
+  gsl_vector_free(tau);
+  gsl_vector_free(b);
+  gsl_vector_free(x);
+  gsl_vector_free(residual);
+  halir_cls_calibration_free(cal);
+  return NULL;
+}
+
 int halir_cls_resample(const halir_num *src_wavenum, const halir_num *src_data,
                        size_t src_n, const halir_cls_grid *grid, halir_num *out)
 {
@@ -148,6 +365,17 @@ int halir_cls_resample(const halir_num *src_wavenum, const halir_num *src_data,
       (grid == NULL) || (grid->wavenum == NULL) || (out == NULL)) {
     fprintf(stderr, "halir_cls_resample: invalid arguments\n");
     return 1;
+  }
+
+  if (validate_strictly_increasing(src_wavenum, src_data, src_n) != 0) {
+    return 1;
+  }
+
+  for (size_t i = 0; i < grid->n; i++) {
+    if (!isfinite(grid->wavenum[i])) {
+      fprintf(stderr, "halir_cls_resample: grid contains non-finite values\n");
+      return 1;
+    }
   }
 
   for (size_t i = 0; i < grid->n; i++) {
@@ -260,6 +488,100 @@ halir_matrix *halir_cls_synthesize_A(const halir_matrix *C, const halir_matrix *
   return A;
 }
 
+halir_matrix *halir_cls_matrix_scale_rows(const halir_matrix *M,
+                                          const halir_num *row_scale)
+{
+  halir_matrix *scaled;
+
+  if ((M == NULL) || (row_scale == NULL) || (M->data == NULL) || (M->rows == 0) || (M->cols == 0)) {
+    fprintf(stderr, "halir_cls_matrix_scale_rows: invalid arguments\n");
+    return NULL;
+  }
+
+  scaled = halir_matrix_create(M->rows, M->cols);
+  if (scaled == NULL) {
+    fprintf(stderr, "halir_cls_matrix_scale_rows: allocation failed\n");
+    return NULL;
+  }
+
+  for (size_t i = 0; i < M->rows; i++) {
+    halir_num factor = row_scale[i];
+    if (!isfinite(factor)) {
+      fprintf(stderr, "halir_cls_matrix_scale_rows: non-finite scale factor at row %zu\n", i);
+      halir_matrix_free(scaled);
+      return NULL;
+    }
+    for (size_t j = 0; j < M->cols; j++) {
+      scaled->data[i * M->cols + j] = factor * M->data[i * M->cols + j];
+    }
+  }
+
+  return scaled;
+}
+
+halir_matrix *halir_cls_design_augment_column(const halir_matrix *C,
+                                              const halir_num *column)
+{
+  halir_matrix *augmented;
+
+  if ((C == NULL) || (column == NULL) || (C->data == NULL) || (C->rows == 0) || (C->cols == 0)) {
+    fprintf(stderr, "halir_cls_design_augment_column: invalid arguments\n");
+    return NULL;
+  }
+
+  augmented = halir_matrix_create(C->rows, C->cols + 1);
+  if (augmented == NULL) {
+    fprintf(stderr, "halir_cls_design_augment_column: allocation failed\n");
+    return NULL;
+  }
+
+  for (size_t i = 0; i < C->rows; i++) {
+    if (!isfinite(column[i])) {
+      fprintf(stderr, "halir_cls_design_augment_column: non-finite column value at row %zu\n", i);
+      halir_matrix_free(augmented);
+      return NULL;
+    }
+
+    memcpy(&augmented->data[i * augmented->cols],
+           &C->data[i * C->cols],
+           C->cols * sizeof(halir_num));
+    augmented->data[i * augmented->cols + C->cols] = column[i];
+  }
+
+  return augmented;
+}
+
+halir_matrix *halir_cls_design_augment_inverse_pathlength(const halir_matrix *C,
+                                                          const halir_num *pathlength)
+{
+  halir_num *inverse_pathlength;
+  halir_matrix *augmented;
+
+  if ((C == NULL) || (pathlength == NULL) || (C->data == NULL) || (C->rows == 0) || (C->cols == 0)) {
+    fprintf(stderr, "halir_cls_design_augment_inverse_pathlength: invalid arguments\n");
+    return NULL;
+  }
+
+  inverse_pathlength = (halir_num*)calloc(C->rows, sizeof(halir_num));
+  if (inverse_pathlength == NULL) {
+    fprintf(stderr, "halir_cls_design_augment_inverse_pathlength: allocation failed\n");
+    return NULL;
+  }
+
+  for (size_t i = 0; i < C->rows; i++) {
+    if ((!isfinite(pathlength[i])) || (pathlength[i] <= 0.0)) {
+      fprintf(stderr, "halir_cls_design_augment_inverse_pathlength: invalid pathlength at row %zu\n", i);
+      free(inverse_pathlength);
+      return NULL;
+    }
+    inverse_pathlength[i] = 1.0 / pathlength[i];
+  }
+
+  augmented = halir_cls_design_augment_column(C, inverse_pathlength);
+  free(inverse_pathlength);
+  return augmented;
+}
+
 halir_matrix *halir_cls_design_identity(size_t ncomp)
 {
   halir_matrix *C = halir_matrix_create(ncomp, ncomp);
@@ -280,106 +602,20 @@ halir_cls_calibration *halir_cls_calibrate(const halir_matrix *A,
                                            const halir_matrix *C,
                                            const halir_cls_grid *grid)
 {
-  halir_cls_calibration *cal = NULL;
-  gsl_matrix *QR = NULL;
-  gsl_vector *tau = NULL;
-  gsl_vector *b = NULL;
-  gsl_vector *x = NULL;
-  gsl_vector *residual = NULL;
-  gsl_error_handler_t *old_handler;
-  size_t ns, nc, nw;
+  return halir_cls_calibrate_weighted_impl(A, C, NULL, grid);
+}
 
-  if ((A == NULL) || (C == NULL) || (grid == NULL) ||
-      (A->data == NULL) || (C->data == NULL) || (grid->wavenum == NULL)) {
-    fprintf(stderr, "halir_cls_calibrate: invalid arguments\n");
+halir_cls_calibration *halir_cls_calibrate_weighted(const halir_matrix *A,
+                                                    const halir_matrix *C,
+                                                    const halir_matrix *W,
+                                                    const halir_cls_grid *grid)
+{
+  if (W == NULL) {
+    fprintf(stderr, "halir_cls_calibrate_weighted: invalid arguments\n");
     return NULL;
   }
 
-  ns = A->rows;
-  nc = C->cols;
-  nw = A->cols;
-
-  if (C->rows != ns) {
-    fprintf(stderr, "halir_cls_calibrate: A rows (%zu) != C rows (%zu)\n", ns, C->rows);
-    return NULL;
-  }
-  if (grid->n != nw) {
-    fprintf(stderr, "halir_cls_calibrate: grid size (%zu) != A cols (%zu)\n", grid->n, nw);
-    return NULL;
-  }
-  if (ns < nc) {
-    fprintf(stderr, "halir_cls_calibrate: need samples (%zu) >= components (%zu)\n", ns, nc);
-    return NULL;
-  }
-
-  cal = (halir_cls_calibration*)calloc(1, sizeof(halir_cls_calibration));
-  if (cal == NULL) {
-    return NULL;
-  }
-  cal->ncomp = nc;
-  cal->grid.wavenum = (halir_num*)calloc(nw, sizeof(halir_num));
-  cal->K = halir_matrix_create(nc, nw);
-  if ((cal->grid.wavenum == NULL) || (cal->K == NULL)) {
-    fprintf(stderr, "halir_cls_calibrate: allocation failed\n");
-    goto fail;
-  }
-  cal->grid.n = nw;
-  memcpy(cal->grid.wavenum, grid->wavenum, nw * sizeof(halir_num));
-
-  /* QR factorization of a working copy of C (QR_decomp destroys input). */
-  QR = gsl_matrix_alloc(ns, nc);
-  tau = gsl_vector_alloc(nc);
-  b = gsl_vector_alloc(ns);
-  x = gsl_vector_alloc(nc);
-  residual = gsl_vector_alloc(ns);
-  if ((QR == NULL) || (tau == NULL) || (b == NULL) || (x == NULL) || (residual == NULL)) {
-    fprintf(stderr, "halir_cls_calibrate: GSL allocation failed\n");
-    goto fail;
-  }
-
-  {
-    gsl_matrix_const_view cv = gsl_matrix_const_view_array(C->data, ns, nc);
-    gsl_matrix_memcpy(QR, &cv.matrix);
-  }
-
-  old_handler = gsl_set_error_handler_off();
-  if (gsl_linalg_QR_decomp(QR, tau) != 0) {
-    gsl_set_error_handler(old_handler);
-    fprintf(stderr, "halir_cls_calibrate: QR decomposition failed\n");
-    goto fail;
-  }
-
-  /* Solve C * k_j = a_j for each spectral column j; k_j is column j of K. */
-  for (size_t j = 0; j < nw; j++) {
-    for (size_t i = 0; i < ns; i++) {
-      gsl_vector_set(b, i, A->data[i * nw + j]);
-    }
-    if (gsl_linalg_QR_lssolve(QR, tau, b, x, residual) != 0) {
-      gsl_set_error_handler(old_handler);
-      fprintf(stderr, "halir_cls_calibrate: least-squares solve failed (column %zu)\n", j);
-      goto fail;
-    }
-    for (size_t i = 0; i < nc; i++) {
-      cal->K->data[i * nw + j] = gsl_vector_get(x, i);
-    }
-  }
-  gsl_set_error_handler(old_handler);
-
-  gsl_matrix_free(QR);
-  gsl_vector_free(tau);
-  gsl_vector_free(b);
-  gsl_vector_free(x);
-  gsl_vector_free(residual);
-  return cal;
-
-fail:
-  gsl_matrix_free(QR);
-  gsl_vector_free(tau);
-  gsl_vector_free(b);
-  gsl_vector_free(x);
-  gsl_vector_free(residual);
-  halir_cls_calibration_free(cal);
-  return NULL;
+  return halir_cls_calibrate_weighted_impl(A, C, W, grid);
 }
 
 void halir_cls_calibration_free(halir_cls_calibration *cal)
@@ -471,6 +707,11 @@ halir_cls_prediction *halir_cls_predict(const halir_cls_calibration *cal,
   if (gsl_linalg_QR_decomp(QRt, tau) != 0) {
     gsl_set_error_handler(old_handler);
     fprintf(stderr, "halir_cls_predict: QR decomposition failed\n");
+    goto fail;
+  }
+  if (!qr_has_full_column_rank(QRt, nw, nc)) {
+    gsl_set_error_handler(old_handler);
+    fprintf(stderr, "halir_cls_predict: calibration matrix is rank deficient\n");
     goto fail;
   }
   if (gsl_linalg_QR_lssolve(QRt, tau, b, x, residual) != 0) {

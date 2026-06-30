@@ -72,6 +72,9 @@ add_test(NAME input_workspace_validation_success COMMAND $<TARGET_FILE:test_inpu
 add_test(NAME input_workspace_validation_invalid_args COMMAND $<TARGET_FILE:test_input> 22)
 add_test(NAME input_result_create_free_api COMMAND $<TARGET_FILE:test_input> 23)
 add_test(NAME input_result_api_invalid_args COMMAND $<TARGET_FILE:test_input> 24)
+add_test(NAME input_spectra_spc_roundtrip COMMAND $<TARGET_FILE:test_input> 25)
+add_test(NAME input_result_spc_roundtrip COMMAND $<TARGET_FILE:test_input> 26)
+add_test(NAME input_result_spc_directory_read COMMAND $<TARGET_FILE:test_input> 27)
 
 add_test(NAME hpar_valid_file_test COMMAND $<TARGET_FILE:test_hpar> 0)
 add_test(NAME hpar_missing_file_test COMMAND $<TARGET_FILE:test_hpar> 1)

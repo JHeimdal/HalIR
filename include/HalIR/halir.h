@@ -586,6 +586,60 @@ void halir_result_free(halir_result *result);
  */
 halir_result *halir_calculate_result(halir_simulation_setup *work);
 
+/**
+ * @brief Write one spectra object to an SPC file.
+ * @ingroup halir_api_io
+ *
+ * The written file uses the SPC new-format little-endian layout.
+ *
+ * @param spectra Spectra object to serialize.
+ * @param file_path Output SPC file path.
+ * @return 0 on success.
+ * @return 1 when arguments are invalid.
+ * @return 2 when file creation or write fails.
+ */
+int halir_spectra_write_spc(const halir_spectra *spectra, const char *file_path);
+
+/**
+ * @brief Write a result container as a multi-subfile SPC file.
+ * @ingroup halir_api_io
+ *
+ * Each spectra entry is written as one SPC subfile.
+ *
+ * @param result Result object to serialize.
+ * @param file_path Output SPC file path.
+ * @return 0 on success.
+ * @return 1 when arguments are invalid.
+ * @return 2 when file creation or write fails.
+ */
+int halir_result_write_spc(const halir_result *result, const char *file_path);
+
+/**
+ * @brief Read the first spectra from an SPC file.
+ * @ingroup halir_api_io
+ *
+ * For multi-subfile SPC files, the first subfile is returned.
+ *
+ * @param file_path Input SPC file path.
+ * @return Newly allocated spectra object on success, or NULL on failure.
+ */
+halir_spectra *halir_spectra_read_spc(const char *file_path);
+
+/**
+ * @brief Read an SPC file into a result container.
+ * @ingroup halir_api_io
+ *
+ * Single-subfile SPC files produce a one-spectra result. Multi-subfile SPC
+ * files produce one spectra entry per subfile.
+ *
+ * The returned result has a NULL workspace pointer because SPC does not store
+ * enough HALIR workspace metadata to reconstruct it.
+ *
+ * @param file_path Input SPC file path.
+ * @return Newly allocated result object on success, or NULL on failure.
+ */
+halir_result *halir_result_read_spc(const char *file_path);
+
 // input str is made lower case and compared halir_Units
 static inline halir_Units halir_Unit_from_str(char *str) {
   size_t length = strlen(str);

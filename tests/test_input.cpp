@@ -1,6 +1,7 @@
 #include <algorithm>
 #include <cmath>
 #include <cstddef>
+#include <cstdio>
 #include <cstring>
 #include <iostream>
 #include <string>
@@ -8,6 +9,7 @@
 
 extern "C" {
 #include "HalIR/halir.h"
+#include "HalIR/spc.h"
 }
 
 bool compare_halir_num(halir_num *A, halir_num *B) {
@@ -68,6 +70,68 @@ bool compare_halir_workspace(halir_simulation_setup *ref, halir_simulation_setup
   } else {
     return false;
   }
+  return true;
+}
+
+bool compare_halir_spectra_values(const halir_spectra *ref, const halir_spectra *test) {
+  if ((ref == nullptr) || (test == nullptr))
+    return false;
+  if (ref->ndatapnts != test->ndatapnts)
+    return false;
+
+  for (size_t i = 0; i < ref->ndatapnts; i++) {
+    if (!compare_halir_num(&ref->wavenum[i], &test->wavenum[i]))
+      return false;
+    if (!compare_halir_num(&ref->data[i], &test->data[i]))
+      return false;
+  }
+
+  return true;
+}
+
+bool compare_halir_result_values(const halir_result *ref, const halir_result *test) {
+  if ((ref == nullptr) || (test == nullptr))
+    return false;
+  if (ref->nspectra != test->nspectra)
+    return false;
+
+  for (size_t i = 0; i < ref->nspectra; i++) {
+    if (!compare_halir_spectra_values(&ref->spectra[i], &test->spectra[i]))
+      return false;
+  }
+
+  return true;
+}
+
+bool compare_spc_roundtrip_values(const halir_spectra *ref, const halir_spectra *test) {
+  if ((ref == nullptr) || (test == nullptr))
+    return false;
+  if (ref->ndatapnts != test->ndatapnts)
+    return false;
+
+  for (size_t i = 0; i < ref->ndatapnts; i++) {
+    halir_num expected_x = static_cast<halir_num>(static_cast<float>(ref->wavenum[i]));
+    halir_num expected_y = static_cast<halir_num>(static_cast<float>(ref->data[i]));
+    if (!compare_halir_num(&expected_x, &test->wavenum[i]))
+      return false;
+    if (!compare_halir_num(&expected_y, &test->data[i]))
+      return false;
+  }
+
+  return true;
+}
+
+bool compare_spc_roundtrip_result(const halir_result *ref, const halir_result *test) {
+  if ((ref == nullptr) || (test == nullptr))
+    return false;
+  if (ref->nspectra != test->nspectra)
+    return false;
+
+  for (size_t i = 0; i < ref->nspectra; i++) {
+    if (!compare_spc_roundtrip_values(&ref->spectra[i], &test->spectra[i]))
+      return false;
+  }
+
   return true;
 }
 
@@ -169,6 +233,9 @@ int main(int argc, char **argv)
     WORKSPACE_VALIDATION_INVALID_ARGS,
     RESULT_CREATE_FREE_API,
     RESULT_API_INVALID_ARGS,
+    SPECTRA_SPC_ROUNDTRIP,
+    RESULT_SPC_ROUNDTRIP,
+    RESULT_SPC_DIRECTORY_READ,
   };
 
   using namespace std;
@@ -691,6 +758,210 @@ int main(int argc, char **argv)
     halir_spectra_free(nullptr);
     halir_result_free(nullptr);
     halir_simulation_setup_free(work);
+    return 0;
+  }
+
+  if (test == SPECTRA_SPC_ROUNDTRIP) {
+    const char *path = "/tmp/halir_spectra_roundtrip.spc";
+    halir_spectra *spectra = halir_spectra_create(5);
+    halir_spectra *loaded = nullptr;
+
+    if (spectra == nullptr) {
+      std::cout << "failed to allocate spectra for spc test" << std::endl;
+      return 1;
+    }
+
+    for (size_t i = 0; i < spectra->ndatapnts; i++) {
+      spectra->wavenum[i] = 2000.0 + 0.5 * static_cast<double>(i);
+      spectra->data[i] = 0.1 * static_cast<double>(i + 1);
+    }
+
+    if (halir_spectra_write_spc(spectra, path) != 0) {
+      std::cout << "halir_spectra_write_spc failed" << std::endl;
+      halir_spectra_free(spectra);
+      return 1;
+    }
+
+    loaded = halir_spectra_read_spc(path);
+    std::remove(path);
+    if (!compare_spc_roundtrip_values(spectra, loaded)) {
+      std::cout << "spectra spc roundtrip mismatch" << std::endl;
+      halir_spectra_free(spectra);
+      halir_spectra_free(loaded);
+      return 1;
+    }
+
+    halir_spectra_free(spectra);
+    halir_spectra_free(loaded);
+    return 0;
+  }
+
+  if (test == RESULT_SPC_ROUNDTRIP) {
+    const char *path = "/tmp/halir_result_roundtrip.spc";
+    halir_simulation_setup *work = halir_simulation_setup_create();
+    halir_result *result = nullptr;
+    halir_result *loaded = nullptr;
+
+    if (work == nullptr) {
+      std::cout << "failed to allocate workspace for spc result test" << std::endl;
+      return 1;
+    }
+
+    work->ftype = HALIR_TRANSMISSION;
+    result = halir_result_create(work, 2);
+    if (result == nullptr) {
+      std::cout << "failed to allocate result for spc test" << std::endl;
+      halir_simulation_setup_free(work);
+      return 1;
+    }
+
+    for (size_t s = 0; s < result->nspectra; s++) {
+      const size_t npts = 4 + s;
+      result->spectra[s].ndatapnts = npts;
+      result->spectra[s].wavenum = (halir_num*)calloc(npts, sizeof(halir_num));
+      result->spectra[s].data = (halir_num*)calloc(npts, sizeof(halir_num));
+      if ((result->spectra[s].wavenum == nullptr) || (result->spectra[s].data == nullptr)) {
+        std::cout << "failed to allocate result spectra buffers" << std::endl;
+        halir_result_free(result);
+        halir_simulation_setup_free(work);
+        return 1;
+      }
+
+      for (size_t i = 0; i < npts; i++) {
+        result->spectra[s].wavenum[i] = 2100.0 + 0.25 * static_cast<double>(i) + static_cast<double>(s);
+        result->spectra[s].data[i] = 1.0 + static_cast<double>(s) + 0.05 * static_cast<double>(i);
+      }
+    }
+
+    if (halir_result_write_spc(result, path) != 0) {
+      std::cout << "halir_result_write_spc failed" << std::endl;
+      halir_result_free(result);
+      halir_simulation_setup_free(work);
+      return 1;
+    }
+
+    loaded = halir_result_read_spc(path);
+    std::remove(path);
+    if (!compare_spc_roundtrip_result(result, loaded)) {
+      std::cout << "result spc roundtrip mismatch" << std::endl;
+      halir_result_free(result);
+      halir_result_free(loaded);
+      halir_simulation_setup_free(work);
+      return 1;
+    }
+
+    halir_result_free(result);
+    halir_result_free(loaded);
+    halir_simulation_setup_free(work);
+    return 0;
+  }
+
+  if (test == RESULT_SPC_DIRECTORY_READ) {
+    const char *path = "/tmp/halir_result_directory_read.spc";
+    halir_result *loaded = nullptr;
+    FILE *fp = fopen(path, "wb");
+    SPCHDR header;
+    SUBHDR subheader;
+    SSFSTC dir[2];
+    float x0[3] = {2100.0f, 2100.5f, 2101.0f};
+    float y0[3] = {1.0f, 1.5f, 2.0f};
+    float x1[2] = {2200.0f, 2200.25f};
+    float y1[2] = {3.0f, 4.0f};
+    long first_offset;
+    long second_offset;
+    long dir_offset;
+    halir_num expected_x0_0;
+    halir_num expected_x1_0;
+    halir_num expected_y0_2;
+    halir_num expected_y1_1;
+
+    if (fp == nullptr) {
+      std::cout << "failed to create spc directory test file" << std::endl;
+      return 1;
+    }
+
+    std::memset(&header, 0, sizeof(header));
+    header.ftflgs = static_cast<BYTE>(TMULTI | TXVALS | TXYXYS);
+    header.fversn = 0x4B;
+    header.fexper = SPCFTIR;
+    header.fexp = static_cast<char>(0x80);
+    header.fnsub = 2;
+    header.fxtype = XWAVEN;
+    header.fytype = YARB;
+    header.ffirst = 2100.0;
+    header.flast = 2200.25;
+    if (fwrite(&header, sizeof(header), 1, fp) != 1) {
+      fclose(fp);
+      std::remove(path);
+      return 1;
+    }
+
+    second_offset = std::ftell(fp);
+    std::memset(&subheader, 0, sizeof(subheader));
+    subheader.subexp = static_cast<char>(0x80);
+    subheader.subindx = 1;
+    subheader.subtime = 1.0f;
+    subheader.subnext = 2.0f;
+    subheader.subnpts = 2;
+    fwrite(&subheader, sizeof(subheader), 1, fp);
+    fwrite(x1, sizeof(float), 2, fp);
+    fwrite(y1, sizeof(float), 2, fp);
+
+    first_offset = std::ftell(fp);
+    std::memset(&subheader, 0, sizeof(subheader));
+    subheader.subexp = static_cast<char>(0x80);
+    subheader.subindx = 0;
+    subheader.subtime = 0.0f;
+    subheader.subnext = 1.0f;
+    subheader.subnpts = 3;
+    fwrite(&subheader, sizeof(subheader), 1, fp);
+    fwrite(x0, sizeof(float), 3, fp);
+    fwrite(y0, sizeof(float), 3, fp);
+
+    dir_offset = std::ftell(fp);
+    std::memset(dir, 0, sizeof(dir));
+    dir[0].ssfposn = static_cast<DWORD>(first_offset);
+    dir[0].ssfsize = static_cast<DWORD>(sizeof(SUBHDR) + sizeof(x0) + sizeof(y0));
+    dir[0].ssftime = 0.0f;
+    dir[1].ssfposn = static_cast<DWORD>(second_offset);
+    dir[1].ssfsize = static_cast<DWORD>(sizeof(SUBHDR) + sizeof(x1) + sizeof(y1));
+    dir[1].ssftime = 1.0f;
+    fwrite(dir, sizeof(SSFSTC), 2, fp);
+
+    header.fnpts = static_cast<DWORD>(dir_offset);
+    std::fseek(fp, 0, SEEK_SET);
+    fwrite(&header, sizeof(header), 1, fp);
+    fclose(fp);
+
+    loaded = halir_result_read_spc(path);
+    std::remove(path);
+    if (loaded == nullptr || loaded->nspectra != 2) {
+      std::cout << "failed to read directory-based spc result" << std::endl;
+      halir_result_free(loaded);
+      return 1;
+    }
+
+    if (loaded->spectra[0].ndatapnts != 3 || loaded->spectra[1].ndatapnts != 2) {
+      std::cout << "directory-based spc result has wrong subfile sizes" << std::endl;
+      halir_result_free(loaded);
+      return 1;
+    }
+
+    expected_x0_0 = static_cast<halir_num>(x0[0]);
+    expected_x1_0 = static_cast<halir_num>(x1[0]);
+    expected_y0_2 = static_cast<halir_num>(y0[2]);
+    expected_y1_1 = static_cast<halir_num>(y1[1]);
+
+    if (!compare_halir_num(&loaded->spectra[0].wavenum[0], &expected_x0_0) ||
+        !compare_halir_num(&loaded->spectra[1].wavenum[0], &expected_x1_0) ||
+        !compare_halir_num(&loaded->spectra[0].data[2], &expected_y0_2) ||
+        !compare_halir_num(&loaded->spectra[1].data[1], &expected_y1_1)) {
+      std::cout << "directory-based spc result values mismatch" << std::endl;
+      halir_result_free(loaded);
+      return 1;
+    }
+
+    halir_result_free(loaded);
     return 0;
   }
   std::string pname = "CO_Test2";

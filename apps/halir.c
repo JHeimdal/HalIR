@@ -41,8 +41,9 @@ static const char *HALIR_EXAMPLE_INPUT =
 static void print_usage(const char *program_name)
 {
   fprintf(stderr,
-          "Usage: %s [--example] <input.json>\n"
+          "Usage: %s [--example] [--spc <output.spc>] <input.json>\n"
           "  --example, -e   Print an example input file to stdout\n"
+          "  --spc, -s       Write calculated result to an SPC file\n"
           "  --help, -h      Show this help message\n",
           program_name);
 }
@@ -50,6 +51,7 @@ static void print_usage(const char *program_name)
 int main(int argc, char **argv)
 {
   const char *inputFile = NULL;
+  const char *spcOutputFile = NULL;
   halir_result *result;
 
   for (int argi = 1; argi < argc; argi++)
@@ -64,6 +66,19 @@ int main(int argc, char **argv)
     {
       fputs(HALIR_EXAMPLE_INPUT, stdout);
       return 0;
+    }
+
+    if ((strcmp(argv[argi], "--spc") == 0) || (strcmp(argv[argi], "-s") == 0))
+    {
+      argi++;
+      if (argi >= argc)
+      {
+        fprintf(stderr, "Missing output path for --spc option.\n");
+        print_usage(argv[0]);
+        return 99;
+      }
+      spcOutputFile = argv[argi];
+      continue;
     }
 
     if (argv[argi][0] == '-')
@@ -99,6 +114,21 @@ int main(int argc, char **argv)
   {
     halir_simulation_setup_free(work);
     return 1;
+  }
+
+  if (spcOutputFile != NULL)
+  {
+    if (halir_result_write_spc(result, spcOutputFile) != 0)
+    {
+      fprintf(stderr, "Failed to write SPC output: %s\n", spcOutputFile);
+      halir_result_free(result);
+      halir_simulation_setup_free(work);
+      return 1;
+    }
+
+    halir_result_free(result);
+    halir_simulation_setup_free(work);
+    return 0;
   }
 
   for (size_t comp = 0; comp < result->nspectra; comp++)
